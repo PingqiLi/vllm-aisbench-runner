@@ -32,6 +32,36 @@ class BenchmarkRunner:
         self.custom_model_config_path = None
         self.vllm_manager = None
 
+    def _apply_vllm_config_override(self, dataset_name: str) -> bool:
+        """
+        Apply vLLM configuration override from dataset config if specified.
+
+        Args:
+            dataset_name: Dataset configuration name
+
+        Returns:
+            True if vLLM config was overridden (requires restart), False otherwise
+        """
+        if not hasattr(self.args, '_dataset_configs'):
+            return False
+
+        dataset_config = self.args._dataset_configs.get(dataset_name)
+        if not dataset_config or 'vllm_config_override' not in dataset_config:
+            return False
+
+        vllm_override = dataset_config['vllm_config_override']
+        print(f"[Setup] Applying vLLM config override for {dataset_name}:")
+
+        # Apply each override to args
+        for key, value in vllm_override.items():
+            # Convert config key to args attribute name
+            arg_name = key
+            old_value = getattr(self.args, arg_name, None)
+            setattr(self.args, arg_name, value)
+            print(f"  - {key}: {old_value} → {value}")
+
+        return True
+
     def _get_dataset_recommended_max_out_len(self, dataset_name: str) -> int:
         """
         Get recommended max_out_len based on dataset characteristics.
@@ -444,12 +474,16 @@ models = [
             original_datasets = self.args.datasets
             self.args.datasets = [dataset]
 
+            # Check if dataset requires vLLM config override
+            needs_vllm_restart = self._apply_vllm_config_override(dataset)
+
             # Generate dataset-specific model config if needed
             if hasattr(self.args, 'model_config') and self.args.model_config:
                 self.custom_model_config_path = self._create_model_config_override(dataset_name=dataset)
 
             try:
                 # Launch vLLM with dataset-specific log file
+                # If needs_vllm_restart, the config has been updated in args
                 if not self.vllm_manager.launch(dataset_name=dataset):
                     failed_datasets.append(dataset)
                     self.args.datasets = original_datasets

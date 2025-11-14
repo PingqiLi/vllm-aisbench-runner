@@ -11,11 +11,15 @@ LongBench v2是一个长文本理解评测基准，用于评估大语言模型�
 
 ## 配置文件说明
 
-### 1. 模型配置: `configs/models/qwen3-30b-a3b-bf16-128k.yaml`
+### 1. 数据集配置: `configs/datasets/longbenchv2.yaml`
 
 关键配置：
 ```yaml
-vllm:
+dataset:
+  name: "longbenchv2_gen_0_shot_chat_prompt"  # Without CoT version
+
+# vLLM配置自动覆盖 - 用于128k context
+vllm_config_override:
   max_model_len: 131072  # 128k context
   rope_scaling: '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
 ```
@@ -26,22 +30,30 @@ vllm:
 - 扩展后context length: 131072 (128k)
 - 与LongBench v2官方评测对齐
 
-### 2. 数据集配置: `configs/datasets/longbenchv2.yaml`
-
-```yaml
-dataset:
-  name: "longbenchv2_gen_0_shot_chat_prompt"  # Without CoT version
-  description: "Long context understanding (without CoT)"
-```
-
 **Without CoT说明**:
 - 使用非思考模式（non-thinking mode）
-- Prompt中不包含 "Let's think step by step"
+- Prompt完全匹配官方实现（`prompts/0shot.txt`）
 - 直接要求模型给出答案
 
-### 3. Benchmark配置: `configs/benchmarks/qwen3-30b-longbench.yaml`
+### 2. Benchmark配置: `configs/benchmarks/qwen3-30b-acc.yaml`
 
-完整的LongBench v2评测配置，组合了上述模型和数据集配置。
+完整的准确率评测配置，包含了LongBench v2在内的所有数据集：
+
+```yaml
+datasets:
+  - "configs/datasets/ceval.yaml"
+  - "configs/datasets/mmlu.yaml"
+  - "configs/datasets/aime2024.yaml"
+  - "configs/datasets/gpqa.yaml"
+  - "configs/datasets/math500.yaml"
+  - "configs/datasets/livecodebench.yaml"
+  - "configs/datasets/longbenchv2.yaml"  # 自动使用128k context
+```
+
+**智能配置切换**:
+- 评测其他数据集时：使用标准32k context配置
+- 评测longbenchv2时：自动切换到128k context配置
+- vLLM服务会在每个数据集间自动重启并应用正确的配置
 
 ## 使用方法
 
@@ -65,12 +77,23 @@ tree datasets/LongBench-v2/
 ### 2. 运行评测
 
 ```bash
-# 运行完整的LongBench v2评测
-python run.py --config-file configs/benchmarks/qwen3-30b-longbench.yaml
+# 方式1：运行完整的准确率评测（包含LongBench v2）
+python run.py --config-file configs/benchmarks/qwen3-30b-acc.yaml
+
+# 方式2：只评测LongBench v2
+python run.py \
+    --model-path Qwen/Qwen3-30B-A3B \
+    --datasets longbenchv2_gen_0_shot_chat_prompt \
+    --config-file configs/datasets/longbenchv2.yaml
 
 # 快速测试（只评测5个样本）
-python run.py --config-file configs/benchmarks/qwen3-30b-longbench.yaml --num-prompts 5
+python run.py --config-file configs/benchmarks/qwen3-30b-acc.yaml --num-prompts 5
 ```
+
+**注意**:
+- 当运行完整的acc benchmark时，系统会自动为longbenchv2切换到128k context配置
+- 每个数据集评测完成后，vLLM会重启以应用下一个数据集的配置
+- 日志会显示配置切换信息：`[Setup] Applying vLLM config override for longbenchv2_gen_0_shot_chat_prompt`
 
 ### 3. 结果输出
 

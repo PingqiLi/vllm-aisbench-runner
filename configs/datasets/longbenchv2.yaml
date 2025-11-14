@@ -6,6 +6,12 @@ dataset:
   name: "longbenchv2_gen_0_shot_chat_prompt"
   description: "Long context understanding (without CoT)"
 
+# vLLM configuration override for 128k context
+# This will restart vLLM with these parameters when evaluating this dataset
+vllm_config_override:
+  max_model_len: 131072  # 128k context
+  rope_scaling: '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
+
 model_config:
   max_out_len: 256  # Aligned with official implementation (128-256)
   generation_kwargs:
