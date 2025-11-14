@@ -318,44 +318,209 @@ models = [
         return self.experiment_dir
 
     def save_config_snapshot(self):
-        """Save configuration snapshot to experiment directory."""
+        """
+        Save comprehensive configuration snapshot for reproducibility.
+        Creates:
+        - config_snapshot.yaml: Full expanded configuration with all overrides
+        - config_original.yaml: Original benchmark config file (reference)
+        - reproduce.sh: Script to reproduce this exact run
+        - metadata.yaml: Runtime information (timestamp, versions, etc.)
+        """
         if not self.experiment_dir:
             return
 
-        config_path = os.path.join(self.experiment_dir, "config.yaml")
+        import shutil
+        import platform
+
+        config_dir = os.path.join(self.experiment_dir, "configs")
+        os.makedirs(config_dir, exist_ok=True)
 
         try:
+            # 1. Save original config file for reference
             if hasattr(self.args, 'config_file') and self.args.config_file:
-                import shutil
-                shutil.copy(self.args.config_file, config_path)
-                print(f"[Setup] Config saved: {config_path}")
-            else:
-                # Generate config from command-line arguments
-                vllm_keys = ['model_path', 'host', 'port', 'tensor_parallel_size', 'pipeline_parallel_size',
-                             'quantization', 'dtype', 'max_model_len', 'gpu_memory_utilization',
-                             'trust_remote_code', 'max_num_seqs', 'enable_prefix_caching']
-                vllm_config = {k: getattr(self.args, k) for k in vllm_keys if getattr(self.args, k, None)}
-                if self.args.vllm_timeout:
-                    vllm_config['timeout'] = self.args.vllm_timeout
-                if self.args.vllm_log_file:
-                    vllm_config['log_file'] = self.args.vllm_log_file
+                original_config_path = os.path.join(config_dir, "config_original.yaml")
+                shutil.copy(self.args.config_file, original_config_path)
 
-                ais_keys = ['datasets', 'mode', 'work_dir', 'max_num_workers', 'debug', 'dump_eval_details']
-                ais_config = {k: getattr(self.args, k) for k in ais_keys if getattr(self.args, k, None)}
-                if self.args.ais_model:
-                    ais_config['model'] = self.args.ais_model
-                if hasattr(self.args, 'summarizer') and self.args.summarizer:
-                    ais_config['summarizer'] = self.args.summarizer
-                if hasattr(self.args, 'merge_ds') and self.args.merge_ds:
-                    ais_config['merge_ds'] = self.args.merge_ds
+            # 2. Generate full expanded configuration snapshot
+            snapshot = self._generate_full_config_snapshot()
+            snapshot_path = os.path.join(config_dir, "config_snapshot.yaml")
+            with open(snapshot_path, 'w') as f:
+                yaml.dump(snapshot, f, default_flow_style=False, sort_keys=False)
 
-                config = {'vllm': vllm_config, 'aisbench': ais_config}
-                with open(config_path, 'w') as f:
-                    yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-                print(f"[Setup] Config generated: {config_path}")
+            # 3. Save runtime metadata
+            metadata = self._generate_metadata()
+            metadata_path = os.path.join(config_dir, "metadata.yaml")
+            with open(metadata_path, 'w') as f:
+                yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+
+            # 4. Generate reproduction script
+            reproduce_script = self._generate_reproduce_script()
+            reproduce_path = os.path.join(config_dir, "reproduce.sh")
+            with open(reproduce_path, 'w') as f:
+                f.write(reproduce_script)
+            os.chmod(reproduce_path, 0o755)
+
+            print(f"[Setup] Configuration snapshot saved to: {config_dir}/")
+            print(f"  - config_snapshot.yaml (full expanded config)")
+            print(f"  - metadata.yaml (runtime info)")
+            print(f"  - reproduce.sh (reproduction script)")
 
         except Exception as e:
-            print(f"[Setup] Warning: Failed to save config: {e}")
+            print(f"[Setup] Warning: Failed to save config snapshot: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _generate_full_config_snapshot(self) -> dict:
+        """Generate comprehensive configuration snapshot with all parameters."""
+        # Base vLLM configuration
+        vllm_keys = ['model_path', 'host', 'port', 'tensor_parallel_size', 'pipeline_parallel_size',
+                     'quantization', 'rope_scaling', 'max_model_len', 'dtype',
+                     'gpu_memory_utilization', 'trust_remote_code', 'max_num_seqs',
+                     'enable_prefix_caching', 'disable_log_requests', 'tokenizer',
+                     'revision', 'served_model_name']
+
+        vllm_config = {}
+        for k in vllm_keys:
+            val = getattr(self.args, k, None)
+            if val is not None:
+                vllm_config[k] = val
+
+        if self.args.vllm_timeout:
+            vllm_config['timeout'] = self.args.vllm_timeout
+        if self.args.vllm_log_file:
+            vllm_config['log_file'] = self.args.vllm_log_file
+        if self.args.vllm_extra_args:
+            vllm_config['extra_args'] = self.args.vllm_extra_args
+
+        # AISBench configuration
+        ais_keys = ['datasets', 'mode', 'work_dir', 'max_num_workers', 'debug',
+                    'dump_eval_details', 'num_prompts']
+        ais_config = {}
+        for k in ais_keys:
+            val = getattr(self.args, k, None)
+            if val is not None:
+                ais_config[k] = val
+
+        if self.args.ais_model:
+            ais_config['model'] = self.args.ais_model
+        if hasattr(self.args, 'summarizer') and self.args.summarizer:
+            ais_config['summarizer'] = self.args.summarizer
+        if hasattr(self.args, 'merge_ds') and self.args.merge_ds:
+            ais_config['merge_ds'] = self.args.merge_ds
+
+        # Dataset-specific configurations
+        dataset_configs = {}
+        if hasattr(self.args, '_dataset_configs'):
+            for dataset_name, ds_config in self.args._dataset_configs.items():
+                dataset_configs[dataset_name] = {
+                    'description': ds_config.get('dataset', {}).get('description', ''),
+                    'model_config': ds_config.get('model_config', {}),
+                }
+                # Include vllm_config_override if present
+                if 'vllm_config_override' in ds_config:
+                    dataset_configs[dataset_name]['vllm_config_override'] = ds_config['vllm_config_override']
+
+        snapshot = {
+            'benchmark': {
+                'name': getattr(self.args, '_benchmark_name', 'custom'),
+                'timestamp': self.start_time.isoformat() if self.start_time else None,
+            },
+            'vllm': vllm_config,
+            'aisbench': ais_config,
+            'datasets': dataset_configs,
+        }
+
+        return snapshot
+
+    def _generate_metadata(self) -> dict:
+        """Generate runtime metadata for reproducibility."""
+        import platform
+        import sys
+
+        metadata = {
+            'runtime': {
+                'timestamp': self.start_time.isoformat() if self.start_time else None,
+                'hostname': platform.node(),
+                'platform': platform.platform(),
+                'python_version': sys.version,
+                'working_directory': os.getcwd(),
+            },
+            'versions': {
+                'python': platform.python_version(),
+                'os': platform.system(),
+            },
+            'command': {
+                'executable': sys.argv[0],
+                'args': sys.argv[1:],
+                'full_command': ' '.join(sys.argv),
+            }
+        }
+
+        # Try to get package versions
+        try:
+            import subprocess
+            result = subprocess.run(['pip', 'list'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                # Parse key packages
+                for line in result.stdout.split('\n'):
+                    for pkg in ['vllm', 'torch', 'transformers', 'opencompass']:
+                        if line.lower().startswith(pkg):
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                metadata['versions'][parts[0]] = parts[1]
+        except:
+            pass
+
+        return metadata
+
+    def _generate_reproduce_script(self) -> str:
+        """Generate shell script to reproduce this exact run."""
+        script_lines = [
+            "#!/bin/bash",
+            "# Reproduction script for benchmark run",
+            f"# Generated: {datetime.now().isoformat()}",
+            "",
+            "set -e  # Exit on error",
+            "",
+            "# Check if running from correct directory",
+            "if [ ! -f \"run.py\" ]; then",
+            "    echo \"Error: Please run this script from the benchmark_runner directory\"",
+            "    exit 1",
+            "fi",
+            "",
+        ]
+
+        # Add the actual command
+        if hasattr(self.args, 'config_file') and self.args.config_file:
+            cmd_parts = [
+                "python run.py",
+                f"--config-file {self.args.config_file}",
+            ]
+
+            # Add optional arguments if they were specified
+            if self.args.num_prompts:
+                cmd_parts.append(f"--num-prompts {self.args.num_prompts}")
+            if self.args.debug:
+                cmd_parts.append("--debug")
+
+            script_lines.append("# Run the benchmark")
+            script_lines.append(" \\\n    ".join(cmd_parts))
+        else:
+            # Build command from individual args
+            cmd_parts = ["python run.py"]
+
+            if self.args.model_path:
+                cmd_parts.append(f"--model-path {self.args.model_path}")
+            if self.args.datasets:
+                datasets_str = " ".join(self.args.datasets)
+                cmd_parts.append(f"--datasets {datasets_str}")
+            if self.args.num_prompts:
+                cmd_parts.append(f"--num-prompts {self.args.num_prompts}")
+
+            script_lines.append(" \\\n    ".join(cmd_parts))
+
+        script_lines.append("")
+        return "\n".join(script_lines)
 
     def rename_output_folder(self):
         """
@@ -402,6 +567,56 @@ models = [
         except Exception:
             pass  # Silently ignore rename errors
 
+    def save_dataset_config(self, dataset_name: str):
+        """Save the actual configuration used for this specific dataset."""
+        if not self.experiment_dir:
+            return
+
+        config_dir = os.path.join(self.experiment_dir, "configs", "per_dataset")
+        os.makedirs(config_dir, exist_ok=True)
+
+        # Clean dataset name for filename
+        safe_name = dataset_name.replace('_gen_0_shot_cot_chat_prompt', '') \
+                                 .replace('_gen_0_shot_chat_prompt', '') \
+                                 .replace('.py', '') \
+                                 .replace('/', '_')
+
+        # Build dataset-specific config
+        dataset_config = {
+            'dataset': {
+                'name': dataset_name,
+            },
+            'vllm': {},
+            'aisbench': {},
+        }
+
+        # Capture current vLLM config (including any overrides)
+        vllm_keys = ['model_path', 'host', 'port', 'tensor_parallel_size',
+                     'max_model_len', 'rope_scaling', 'dtype', 'gpu_memory_utilization',
+                     'trust_remote_code', 'max_num_seqs', 'enable_prefix_caching']
+        for k in vllm_keys:
+            val = getattr(self.args, k, None)
+            if val is not None:
+                dataset_config['vllm'][k] = val
+
+        # Capture AISBench config
+        if self.args.ais_model:
+            dataset_config['aisbench']['model'] = self.args.ais_model
+        if self.args.num_prompts:
+            dataset_config['aisbench']['num_prompts'] = self.args.num_prompts
+
+        # Add dataset-specific model_config if available
+        if hasattr(self.args, '_dataset_configs'):
+            ds_cfg = self.args._dataset_configs.get(dataset_name, {})
+            if 'model_config' in ds_cfg:
+                dataset_config['model_config'] = ds_cfg['model_config']
+            if 'vllm_config_override' in ds_cfg:
+                dataset_config['vllm_config_override_applied'] = ds_cfg['vllm_config_override']
+
+        config_path = os.path.join(config_dir, f"{safe_name}.yaml")
+        with open(config_path, 'w') as f:
+            yaml.dump(dataset_config, f, default_flow_style=False, sort_keys=False)
+
     def run_aisbench(self, dataset_idx: int = 0, total_datasets: int = 1) -> bool:
         """Run AISBench evaluation."""
         cmd = self.build_aisbench_command()
@@ -409,6 +624,9 @@ models = [
         dataset_name = self.args.datasets[0] if self.args.datasets else "unknown"
         print(f"\n[Benchmark {dataset_idx}/{total_datasets}] Running: {dataset_name}")
         print(f"[Benchmark] Command: {' '.join(cmd)}\n")
+
+        # Save dataset-specific config before running
+        self.save_dataset_config(dataset_name)
 
         try:
             result = subprocess.run(

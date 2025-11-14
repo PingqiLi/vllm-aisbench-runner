@@ -281,6 +281,47 @@ python run.py --config-file config.yaml --vllm-timeout 600
 | BF16 | ~60GB | 2 | 两卡并行 |
 | W4A4 | ~15GB | 1 | 单卡运行 |
 
+## 配置保存和实验复现
+
+每次运行benchmark时，系统会自动保存完整的配置快照，确保实验可复现。
+
+### 保存的文件
+
+```
+outputs/qwen3_30b_bf16_acc/
+└── configs/
+    ├── config_snapshot.yaml     # 完整展开的配置（所有参数）
+    ├── config_original.yaml     # 原始配置文件（引用）
+    ├── metadata.yaml            # 运行环境信息
+    ├── reproduce.sh             # 一键复现脚本（可执行）
+    └── per_dataset/             # 每个数据集的实际配置
+        ├── ceval.yaml           # ceval使用的配置
+        ├── longbenchv2.yaml     # longbenchv2使用的128k配置
+        └── ...
+```
+
+### 快速复现实验
+
+```bash
+# 方法1：使用reproduce.sh（推荐）
+./outputs/qwen3_30b_bf16_acc/configs/reproduce.sh
+
+# 方法2：查看并验证实际使用的配置
+cat outputs/qwen3_30b_bf16_acc/configs/config_snapshot.yaml
+
+# 方法3：查看特定数据集的配置（包括override）
+cat outputs/qwen3_30b_bf16_acc/configs/per_dataset/longbenchv2.yaml
+```
+
+### 配置快照的优势
+
+- ✅ **完整性**：记录所有实际使用的参数（包括vllm_config_override）
+- ✅ **可追溯**：保存环境信息、版本号、运行时间
+- ✅ **可复现**：一键执行reproduce.sh复现实验
+- ✅ **可对比**：清晰看到每个数据集使用的不同配置
+
+详细说明请参考：[docs/CONFIG_SNAPSHOT.md](docs/CONFIG_SNAPSHOT.md)
+
 ## 高级配置
 
 详细的配置架构说明、扩展指南和最佳实践，请参考 [CONFIGURATION.md](CONFIGURATION.md)。
