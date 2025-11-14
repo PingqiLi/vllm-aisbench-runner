@@ -137,22 +137,27 @@ output:
 ### 选择特定数据集
 ```bash
 python run.py \
-    --config-file configs/benchmarks/qwen3-30b-accuracy.yaml \
+    --config-file configs/benchmarks/qwen3-30b-acc.yaml \
     --datasets ceval_gen_0_shot_cot_chat_prompt.py mmlu_gen_0_shot_cot_chat_prompt.py
 ```
 
 ### 自定义 vLLM 参数
 ```bash
 python run.py \
-    --config-file configs/benchmarks/qwen3-30b-accuracy.yaml \
+    --config-file configs/benchmarks/qwen3-30b-acc.yaml \
     --tensor-parallel-size 4 \
     --port 8080
 ```
 
-### Debug 模式快速测试
+### 快速验证配置（推荐）
+使用 debug 模式快速验证配置正确性：
 ```bash
+# 使用快速测试脚本（只跑 5 条数据）
+./quick_test.sh configs/benchmarks/qwen3-30b-acc.yaml
+
+# 或手动指定
 python run.py \
-    --config-file configs/benchmarks/qwen3-30b-accuracy.yaml \
+    --config-file configs/benchmarks/qwen3-30b-acc.yaml \
     --debug \
     --num-prompts 5
 ```

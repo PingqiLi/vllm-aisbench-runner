@@ -1,15 +1,20 @@
 # LongBenchV2 - Long Context Understanding
-# Evaluation for long-context capabilities
+# Evaluation for long-context capabilities (8k-2M words)
 
 dataset:
-  name: "longbenchv2_gen_0_shot_cot_chat_prompt.py"
+  name: "longbenchv2_gen.py"
   description: "Long context understanding and reasoning"
 
 model_config:
-  max_out_len: 8192  # Very long outputs for long-context tasks
+  max_out_len: 256  # Aligned with official implementation (128-256)
   generation_kwargs:
     temperature: 0.0
     seed: 42
 
 # Note: Requires huggingface-cli for dataset download
 # pip install huggingface_hub
+# Dataset path: ais_bench/datasets/LongBench-v2/data.json
+
+# WARNING: LongBench-v2 contains very long contexts (8k-2M words)
+# Ensure your vLLM max_model_len is sufficient (recommend 131072+)
+# Otherwise inputs will exceed context limit and predictions will be empty

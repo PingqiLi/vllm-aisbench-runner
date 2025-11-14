@@ -1,12 +1,12 @@
-# Qwen3-30B-A3B W4A4 Accuracy Benchmark
-# Quantized model accuracy evaluation
+# Qwen3-30B-A3B W4A4 Quantized Accuracy Benchmark
+# Accuracy evaluation with W4A4 quantization on Ascend NPU
 
 benchmark:
-  name: "qwen3-30b-w4a4-accuracy"
-  description: "Accuracy evaluation for Qwen3-30B-A3B W4A4 quantization"
+  name: "qwen3-30b-w4a4-acc"
+  description: "Accuracy evaluation for Qwen3-30B-A3B (W4A4 quantized)"
   type: "accuracy"
 
-# Model configuration
+# Model configuration (W4A4 quantized)
 model_config: "configs/models/qwen3-30b-a3b-w4a4.yaml"
 
 # Dataset configurations
@@ -17,10 +17,12 @@ datasets:
   - "configs/datasets/gpqa.yaml"
   - "configs/datasets/math500.yaml"
   - "configs/datasets/livecodebench.yaml"
+  - "configs/datasets/longbenchv2.yaml"
 
 # Output configuration
 output:
-  work_dir: "outputs/qwen3_30b_w4a4_accuracy"
+  work_dir: "outputs/qwen3_30b_w4a4_acc"
 
+# Runtime options
 runtime:
   debug: false

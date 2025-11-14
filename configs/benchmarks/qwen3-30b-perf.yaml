@@ -2,7 +2,7 @@
 # Throughput and latency testing
 
 benchmark:
-  name: "qwen3-30b-performance"
+  name: "qwen3-30b-perf"
   description: "Performance/throughput evaluation for Qwen3-30B-A3B"
   type: "performance"
 
@@ -16,7 +16,7 @@ datasets:
 
 # Output configuration
 output:
-  work_dir: "outputs/qwen3_30b_performance"
+  work_dir: "outputs/qwen3_30b_perf"
 
 runtime:
   debug: false

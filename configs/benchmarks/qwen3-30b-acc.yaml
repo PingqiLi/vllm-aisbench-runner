@@ -2,7 +2,7 @@
 # Comprehensive accuracy evaluation across multiple domains
 
 benchmark:
-  name: "qwen3-30b-accuracy"
+  name: "qwen3-30b-acc"
   description: "Full accuracy evaluation for Qwen3-30B-A3B (BF16)"
   type: "accuracy"
 
@@ -17,12 +17,11 @@ datasets:
   - "configs/datasets/gpqa.yaml"
   - "configs/datasets/math500.yaml"
   - "configs/datasets/livecodebench.yaml"
-  # Optional: Uncomment if LongBenchV2 is available
-  # - "configs/datasets/longbenchv2.yaml"
+  - "configs/datasets/longbenchv2.yaml"
 
 # Output configuration
 output:
-  work_dir: "outputs/qwen3_30b_bf16_accuracy"
+  work_dir: "outputs/qwen3_30b_bf16_acc"
 
 # Runtime options
 runtime:

@@ -241,5 +241,5 @@ else
 fi
 echo ""
 echo "Next steps:"
-echo "  1. Run benchmarks: python run.py --config-file configs/benchmarks/qwen3-30b-accuracy.yaml"
+echo "  1. Run benchmarks: python run.py --config-file configs/benchmarks/qwen3-30b-acc.yaml"
 echo ""
