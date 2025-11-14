@@ -327,35 +327,25 @@ models = [
         except Exception as e:
             print(f"[Setup] Warning: Failed to save config: {e}")
 
-    def extract_model_info_from_config(self) -> tuple:
-        """Extract model name and precision from config file path."""
-        if hasattr(self.args, 'config_file') and self.args.config_file:
-            config_path = Path(self.args.config_file)
-            model_dir = config_path.parent.name
-            config_name = config_path.stem
-
-            # Extract precision, handling _perf suffix
-            parts = config_name.split('_')
-            if 'perf' in parts:
-                precision = 'perf'
-            else:
-                precision = parts[-1] if len(parts) > 1 else 'unknown'
-
-            return model_dir, precision
-        return 'unknown', 'unknown'
-
     def rename_output_folder(self):
         """
-        Rename the output folder with model name, precision and benchmark name.
-        New format: {model}_{precision}_{benchmark} (no timestamp)
+        Rename the output folder with dataset name only.
+        New format: {dataset_name} (simplified, no model/precision prefix)
         """
         try:
             # Work in the experiment directory
             if not self.experiment_dir or not os.path.exists(self.experiment_dir):
                 return
 
-            model_name, precision = self.extract_model_info_from_config()
+            # Extract clean dataset name
             dataset_name = self.args.datasets[0] if self.args.datasets else "unknown"
+
+            # Clean up dataset name: remove _gen_0_shot_cot_chat_prompt suffix
+            # Examples:
+            #   ceval_gen_0_shot_cot_chat_prompt -> ceval
+            #   aime2024_gen_0_shot_chat_prompt -> aime2024
+            #   livecodebench_code_generate_lite_gen_0_shot_chat -> livecodebench
+            clean_name = dataset_name.split('_gen')[0] if '_gen' in dataset_name else dataset_name
 
             # Find timestamp directories inside experiment_dir
             subdirs = [d for d in os.listdir(self.experiment_dir)
@@ -368,10 +358,9 @@ models = [
             subdirs.sort(key=lambda x: os.path.getmtime(os.path.join(self.experiment_dir, x)), reverse=True)
             latest_dir = subdirs[0]
 
-            # New name format: {model}_{precision}_{benchmark} (no timestamp)
+            # New name format: just the dataset name
             old_path = os.path.join(self.experiment_dir, latest_dir)
-            new_name = f"{model_name}_{precision}_{dataset_name}"
-            new_path = os.path.join(self.experiment_dir, new_name)
+            new_path = os.path.join(self.experiment_dir, clean_name)
 
             # Rename if the new name is different
             if old_path != new_path and not os.path.exists(new_path):
