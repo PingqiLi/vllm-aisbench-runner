@@ -2,7 +2,7 @@
 # Evaluation for long-context capabilities (8k-2M words)
 
 dataset:
-  name: "longbenchv2_gen.py"
+  name: "longbenchv2_gen"
   description: "Long context understanding and reasoning"
 
 model_config:

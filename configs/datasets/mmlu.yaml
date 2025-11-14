@@ -2,8 +2,8 @@
 # English knowledge evaluation across 57 subjects
 
 dataset:
-  name: "mmlu_gen_0_shot_cot_chat_prompt.py"
-  description: "English multitask language understanding (57 subjects)"
+  name: "mmlu_gen_0_shot_cot_chat_prompt"
+  description: "English multitask language understanding"
 
 model_config:
   max_out_len: 2048
