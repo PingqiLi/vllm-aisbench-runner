@@ -1,0 +1,11 @@
+# GSM8K - Grade School Math 8K
+# For performance testing
+
+dataset:
+  name: "demo_gsm8k_gen_4_shot_cot_chat_prompt"
+  description: "Grade school math problems (performance test)"
+
+model_config:
+  max_out_len: 512  # Short answers for performance testing
+  generation_kwargs:
+    temperature: 0.7  # Default for perf tests

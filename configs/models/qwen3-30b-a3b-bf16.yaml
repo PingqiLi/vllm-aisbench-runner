@@ -1,0 +1,35 @@
+# Qwen3-30B-A3B - BF16 Precision
+# Full precision model for accuracy benchmarking
+
+model:
+  name: "Qwen3-30B-A3B"
+  precision: "bf16"
+  description: "Qwen3 30B MoE model with BF16 precision"
+
+vllm:
+  model_path: "Qwen/Qwen3-30B-A3B"
+  host: "localhost"
+  port: 8000
+  tensor_parallel_size: 2       # Requires 2 GPUs/NPUs (~60GB per card)
+  dtype: "bfloat16"
+  gpu_memory_utilization: 0.90
+  trust_remote_code: true
+  max_num_seqs: 256
+  enable_prefix_caching: true
+  max_model_len: 32768
+  timeout: 600
+  log_file: "logs/qwen3_30b_bf16_vllm.log"
+
+aisbench:
+  model: "vllm_api_general_chat"  # For accuracy testing
+  mode: "all"
+  summarizer: "example"
+  merge_ds: true
+  max_num_workers: 8              # Concurrent requests
+  dump_eval_details: true
+
+# Hardware requirements
+hardware:
+  min_gpus: 2
+  memory_per_gpu: "60GB"
+  recommended_gpus: 2

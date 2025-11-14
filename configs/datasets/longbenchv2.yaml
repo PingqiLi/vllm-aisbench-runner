@@ -1,0 +1,15 @@
+# LongBenchV2 - Long Context Understanding
+# Evaluation for long-context capabilities
+
+dataset:
+  name: "longbenchv2_gen_0_shot_cot_chat_prompt.py"
+  description: "Long context understanding and reasoning"
+
+model_config:
+  max_out_len: 8192  # Very long outputs for long-context tasks
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42
+
+# Note: Requires huggingface-cli for dataset download
+# pip install huggingface_hub

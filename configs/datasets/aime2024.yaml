@@ -1,0 +1,12 @@
+# AIME 2024 - American Invitational Mathematics Examination
+# Advanced mathematical reasoning
+
+dataset:
+  name: "aime2024_gen_0_shot_cot_chat_prompt.py"
+  description: "Advanced mathematics competition problems"
+
+model_config:
+  max_out_len: 4096  # Long reasoning chains required
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42

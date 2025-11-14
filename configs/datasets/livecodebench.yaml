@@ -1,0 +1,12 @@
+# LiveCodeBench - Code Generation Benchmark
+# Real-world programming challenges
+
+dataset:
+  name: "livecodebench_gen_0_shot_cot_chat_prompt.py"
+  description: "Code generation and problem solving"
+
+model_config:
+  max_out_len: 2048  # Code solutions
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42

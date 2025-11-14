@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Outputs
+outputs/
+logs/
+*.log
+
+# Datasets (too large for git)
+datasets/
+
+# Model checkpoints (not config files!)
+# Note: configs/models/ contains YAML configs and should be tracked
+*.bin
+*.safetensors
+*.pt
+*.pth
+/models/
+
+# Temporary files
+*.tmp
+temp_model_configs/
+.cache/
+
+# Environment
+.env
+.env.local

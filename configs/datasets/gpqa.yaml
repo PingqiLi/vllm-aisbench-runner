@@ -1,0 +1,12 @@
+# GPQA - Graduate-Level Google-Proof Q&A Benchmark
+# Scientific reasoning with long-form answers
+
+dataset:
+  name: "gpqa_gen_0_shot_cot_chat_prompt.py"
+  description: "Graduate-level scientific reasoning benchmark"
+
+model_config:
+  max_out_len: 4096  # Needs longer output for reasoning chains
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42

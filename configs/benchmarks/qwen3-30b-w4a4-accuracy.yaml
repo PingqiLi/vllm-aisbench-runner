@@ -1,0 +1,26 @@
+# Qwen3-30B-A3B W4A4 Accuracy Benchmark
+# Quantized model accuracy evaluation
+
+benchmark:
+  name: "qwen3-30b-w4a4-accuracy"
+  description: "Accuracy evaluation for Qwen3-30B-A3B W4A4 quantization"
+  type: "accuracy"
+
+# Model configuration
+model_config: "configs/models/qwen3-30b-a3b-w4a4.yaml"
+
+# Dataset configurations
+datasets:
+  - "configs/datasets/ceval.yaml"
+  - "configs/datasets/mmlu.yaml"
+  - "configs/datasets/aime2024.yaml"
+  - "configs/datasets/gpqa.yaml"
+  - "configs/datasets/math500.yaml"
+  - "configs/datasets/livecodebench.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_w4a4_accuracy"
+
+runtime:
+  debug: false

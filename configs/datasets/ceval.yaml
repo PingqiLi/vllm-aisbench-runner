@@ -1,0 +1,12 @@
+# CEVAL - 中文综合评测
+# Chinese Evaluation Benchmark
+
+dataset:
+  name: "ceval_gen_0_shot_cot_chat_prompt.py"
+  description: "Chinese comprehensive evaluation across multiple subjects"
+
+model_config:
+  max_out_len: 2048
+  generation_kwargs:
+    temperature: 0.0  # Deterministic for accuracy testing
+    seed: 42

@@ -1,0 +1,8 @@
+# Core dependencies for vLLM AISBench Runner
+pyyaml>=6.0
+requests>=2.31.0
+
+# MATH500 dataset dependencies (optional)
+# Uncomment if you need to run MATH500 benchmark
+latex2sympy2_extended
+math_verify

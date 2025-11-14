@@ -1,0 +1,22 @@
+# Qwen3-30B-A3B Performance Benchmark
+# Throughput and latency testing
+
+benchmark:
+  name: "qwen3-30b-performance"
+  description: "Performance/throughput evaluation for Qwen3-30B-A3B"
+  type: "performance"
+
+# Model configuration
+model_config: "configs/models/qwen3-30b-a3b-perf.yaml"
+
+# Dataset configurations (lightweight for perf testing)
+datasets:
+  - "configs/datasets/gsm8k.yaml"
+  - "configs/datasets/synthetic.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_performance"
+
+runtime:
+  debug: false
