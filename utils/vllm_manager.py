@@ -45,7 +45,11 @@ class VLLMManager:
         if self.args.quantization:
             cmd.extend(["--quantization", self.args.quantization])
         if self.args.rope_scaling:
-            cmd.extend(["--rope-scaling", json.dumps(self.args.rope_scaling)])
+            # rope_scaling is already a JSON string from config
+            if isinstance(self.args.rope_scaling, str):
+                cmd.extend(["--rope-scaling", self.args.rope_scaling])
+            else:
+                cmd.extend(["--rope-scaling", json.dumps(self.args.rope_scaling)])
         if self.args.max_model_len:
             cmd.extend(["--max-model-len", str(self.args.max_model_len)])
         if self.args.gpu_memory_utilization:

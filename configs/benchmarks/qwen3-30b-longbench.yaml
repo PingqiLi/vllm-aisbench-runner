@@ -1,0 +1,19 @@
+# Qwen3-30B-A3B LongBench v2 Evaluation
+# Official configuration: 128k context, without CoT
+# Aligned with LongBench v2 leaderboard evaluation settings
+
+benchmark:
+  name: "qwen3-30b-longbench"
+  description: "LongBench v2 evaluation for Qwen3-30B-A3B (128k context, w/o CoT)"
+  type: "accuracy"
+
+model_config: "configs/models/qwen3-30b-a3b-bf16-128k.yaml"
+
+datasets:
+  - "configs/datasets/longbenchv2.yaml"
+
+output:
+  work_dir: "outputs/qwen3_30b_longbench"
+
+runtime:
+  debug: false

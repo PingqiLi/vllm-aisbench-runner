@@ -37,7 +37,8 @@ logs/
 *.log
 
 # Datasets (too large for git)
-datasets/
+# Note: configs/datasets/ contains YAML configs and should be tracked
+/datasets/
 
 # Model checkpoints (not config files!)
 # Note: configs/models/ contains YAML configs and should be tracked
