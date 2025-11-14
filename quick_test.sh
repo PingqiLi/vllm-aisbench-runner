@@ -4,7 +4,8 @@
 
 set -e
 
-CONFIG_FILE="${1:-configs/benchmarks/qwen3-30b-acc.yaml}"
+# Use quick-test.yaml by default, or accept custom config
+CONFIG_FILE="${1:-configs/benchmarks/quick-test.yaml}"
 NUM_PROMPTS="${2:-5}"
 
 echo "========================================="
@@ -18,7 +19,6 @@ echo ""
 # Run with debug mode and limited prompts
 python run.py \
     --config-file "$CONFIG_FILE" \
-    --debug \
     --num-prompts "$NUM_PROMPTS"
 
 echo ""
@@ -27,5 +27,5 @@ echo "✓ Verification completed successfully!"
 echo "========================================="
 echo ""
 echo "To run full benchmark:"
-echo "  python run.py --config-file $CONFIG_FILE"
+echo "  python run.py --config-file configs/benchmarks/qwen3-30b-acc.yaml"
 echo ""

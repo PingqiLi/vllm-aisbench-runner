@@ -1,0 +1,24 @@
+# Quick Test Configuration
+# Fast configuration validation using debug mode
+# Only runs a few samples from each dataset to verify setup
+
+benchmark:
+  name: "quick-test"
+  description: "Quick configuration validation (debug mode)"
+  type: "accuracy"
+
+# Model configuration
+model_config: "configs/models/qwen3-30b-a3b-bf16.yaml"
+
+# Minimal dataset selection for quick testing
+datasets:
+  - "configs/datasets/ceval.yaml"
+  - "configs/datasets/mmlu.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/quick_test"
+
+# Runtime options - enable debug mode
+runtime:
+  debug: true

@@ -150,15 +150,17 @@ python run.py \
 ```
 
 ### 快速验证配置（推荐）
-使用 debug 模式快速验证配置正确性：
+使用专用的 quick-test 配置快速验证：
 ```bash
-# 使用快速测试脚本（只跑 5 条数据）
+# 使用快速测试配置（默认，只跑 ceval + mmlu，每个 5 条数据）
+./quick_test.sh
+
+# 测试其他配置
 ./quick_test.sh configs/benchmarks/qwen3-30b-acc.yaml
 
 # 或手动指定
 python run.py \
-    --config-file configs/benchmarks/qwen3-30b-acc.yaml \
-    --debug \
+    --config-file configs/benchmarks/quick-test.yaml \
     --num-prompts 5
 ```
 
