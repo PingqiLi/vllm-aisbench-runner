@@ -19,6 +19,10 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
     """
     Load suite configuration (new task-based architecture).
 
+    Supports two formats:
+    1. tasks: [list of file paths] - Load from external files
+    2. _tasks: [list of inline task configs] - Use inlined tasks (for reproducible snapshots)
+
     Args:
         suite_path: Path to suite config file
 
@@ -27,11 +31,16 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
     """
     suite_config = load_config_file(suite_path)
 
-    # Load all task configurations
-    task_configs = []
-    for task_path in suite_config.get('tasks', []):
-        task_config = load_config_file(task_path)
-        task_configs.append(task_config)
+    # Check if tasks are already inlined (from config_snapshot.yaml)
+    if '_tasks' in suite_config:
+        # Tasks are already inlined, use them directly
+        task_configs = suite_config['_tasks']
+    else:
+        # Load all task configurations from external files
+        task_configs = []
+        for task_path in suite_config.get('tasks', []):
+            task_config = load_config_file(task_path)
+            task_configs.append(task_config)
 
     # Prepare merged config
     merged = {

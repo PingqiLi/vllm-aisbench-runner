@@ -15,9 +15,9 @@ def save_config_snapshot(args: argparse.Namespace, experiment_dir: str, start_ti
     """
     Save comprehensive configuration snapshot for reproducibility.
     Creates:
-    - config_snapshot.yaml: Full expanded configuration
+    - config_snapshot.yaml: Full reproducible configuration (can be used with --config-file)
+    - config_original.yaml: Original config file for reference (if applicable)
     - metadata.yaml: Runtime information
-    - reproduce.sh: Reproduction script
     """
     if not experiment_dir:
         return
@@ -33,11 +33,11 @@ def save_config_snapshot(args: argparse.Namespace, experiment_dir: str, start_ti
             original_config_path = os.path.join(config_dir, "config_original.yaml")
             shutil.copy(args.config_file, original_config_path)
 
-        # 2. Generate full expanded configuration snapshot
+        # 2. Generate full expanded configuration snapshot (reproducible)
         snapshot = generate_full_config_snapshot(args, start_time)
         snapshot_path = os.path.join(config_dir, "config_snapshot.yaml")
         with open(snapshot_path, 'w') as f:
-            yaml.dump(snapshot, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(snapshot, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
         # 3. Save runtime metadata
         metadata = generate_metadata(args, start_time)
@@ -45,21 +45,70 @@ def save_config_snapshot(args: argparse.Namespace, experiment_dir: str, start_ti
         with open(metadata_path, 'w') as f:
             yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
 
-        # 4. Generate reproduction script
-        reproduce_script = generate_reproduce_script(args)
-        reproduce_path = os.path.join(config_dir, "reproduce.sh")
-        with open(reproduce_path, 'w') as f:
-            f.write(reproduce_script)
-        os.chmod(reproduce_path, 0o755)
-
         print(f"[Setup] Config snapshot saved to: {config_dir}/")
+        print(f"[Setup] To reproduce this run: python run.py --config-file {snapshot_path}")
 
     except Exception as e:
         print(f"[Setup] Warning: Failed to save config snapshot: {e}")
 
 
 def generate_full_config_snapshot(args: argparse.Namespace, start_time: datetime) -> Dict[str, Any]:
-    """Generate comprehensive configuration snapshot with all parameters."""
+    """
+    Generate comprehensive configuration snapshot with all parameters.
+
+    For task-based architecture: Returns suite config with inlined tasks (方案B)
+    For legacy architecture: Returns benchmark config with datasets
+    """
+    # Check if using task-based architecture
+    if hasattr(args, '_tasks') and args._tasks:
+        return _generate_task_based_snapshot(args, start_time)
+    else:
+        return _generate_legacy_snapshot(args, start_time)
+
+
+def _generate_task_based_snapshot(args: argparse.Namespace, start_time: datetime) -> Dict[str, Any]:
+    """Generate reproducible config for task-based architecture (方案B)."""
+
+    # Suite metadata
+    suite_name = getattr(args, '_suite_name', 'custom')
+    snapshot = {
+        'suite': {
+            'name': suite_name,
+            'description': f'Reproduced from run at {start_time.isoformat()}' if start_time else 'Reproduced run',
+            'type': 'accuracy',  # or extract from original suite config
+        },
+        '_tasks': [],  # Inline all task configurations
+        'output': {
+            'work_dir': args.work_dir if args.work_dir else 'outputs/default',
+        },
+        'runtime': {
+            'debug': args.debug if args.debug else False,
+        }
+    }
+
+    # Inline each task with complete configuration
+    for task_config in args._tasks:
+        task_snapshot = {}
+
+        # Task metadata
+        if 'task' in task_config:
+            task_snapshot['task'] = task_config['task'].copy()
+
+        # vLLM configuration
+        if 'vllm' in task_config:
+            task_snapshot['vllm'] = task_config['vllm'].copy()
+
+        # AISBench configuration
+        if 'aisbench' in task_config:
+            task_snapshot['aisbench'] = task_config['aisbench'].copy()
+
+        snapshot['_tasks'].append(task_snapshot)
+
+    return snapshot
+
+
+def _generate_legacy_snapshot(args: argparse.Namespace, start_time: datetime) -> Dict[str, Any]:
+    """Generate config snapshot for legacy dataset-based architecture."""
     # Base vLLM configuration
     vllm_keys = ['model_path', 'host', 'port', 'tensor_parallel_size', 'pipeline_parallel_size',
                  'quantization', 'rope_scaling', 'max_model_len', 'dtype',
@@ -138,6 +187,10 @@ def generate_metadata(args: argparse.Namespace, start_time: datetime) -> Dict[st
             'executable': sys.argv[0],
             'args': sys.argv[1:],
             'full_command': ' '.join(sys.argv),
+        },
+        'reproduction': {
+            'command': 'python run.py --config-file outputs/<experiment>/configs/config_snapshot.yaml',
+            'note': 'Use config_snapshot.yaml to reproduce this exact run with all parameters',
         }
     }
 
@@ -156,53 +209,6 @@ def generate_metadata(args: argparse.Namespace, start_time: datetime) -> Dict[st
         pass
 
     return metadata
-
-
-def generate_reproduce_script(args: argparse.Namespace) -> str:
-    """Generate shell script to reproduce this exact run."""
-    script_lines = [
-        "#!/bin/bash",
-        "# Reproduction script for benchmark run",
-        f"# Generated: {datetime.now().isoformat()}",
-        "",
-        "set -e  # Exit on error",
-        "",
-        "# Check if running from correct directory",
-        "if [ ! -f \"run.py\" ]; then",
-        "    echo \"Error: Please run this script from the benchmark_runner directory\"",
-        "    exit 1",
-        "fi",
-        "",
-    ]
-
-    # Add the actual command
-    if hasattr(args, 'config_file') and args.config_file:
-        cmd_parts = [
-            "python run.py",
-            f"--config-file {args.config_file}",
-        ]
-
-        if args.num_prompts:
-            cmd_parts.append(f"--num-prompts {args.num_prompts}")
-        if args.debug:
-            cmd_parts.append("--debug")
-
-        script_lines.append("# Run the benchmark")
-        script_lines.append(" \\\n    ".join(cmd_parts))
-    else:
-        cmd_parts = ["python run.py"]
-        if args.model_path:
-            cmd_parts.append(f"--model-path {args.model_path}")
-        if args.datasets:
-            datasets_str = " ".join(args.datasets)
-            cmd_parts.append(f"--datasets {datasets_str}")
-        if args.num_prompts:
-            cmd_parts.append(f"--num-prompts {args.num_prompts}")
-
-        script_lines.append(" \\\n    ".join(cmd_parts))
-
-    script_lines.append("")
-    return "\n".join(script_lines)
 
 
 def save_dataset_config(args: argparse.Namespace, dataset_name: str, experiment_dir: str):
