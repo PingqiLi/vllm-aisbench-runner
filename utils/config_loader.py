@@ -54,7 +54,13 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
 
 
 def merge_config_with_args(config: Dict[str, Any], args: argparse.Namespace) -> argparse.Namespace:
-    """Merge suite config with command line arguments (CLI args take precedence)."""
+    """
+    Merge suite config with command line arguments (CLI args take precedence).
+
+    CLI arguments can override values in all tasks. For example:
+    - --model-path will override model_path in all tasks
+    - --tensor-parallel-size will override tensor_parallel_size in all tasks
+    """
     # Store tasks and suite name
     args._tasks = config['_tasks']
     args._suite_name = config['_suite_name']
@@ -69,4 +75,57 @@ def merge_config_with_args(config: Dict[str, Any], args: argparse.Namespace) -> 
         if not args.debug:
             args.debug = config['runtime']['debug']
 
+    # Apply CLI overrides to all tasks
+    # This allows using --model-path, --tensor-parallel-size etc to override task configs
+    _apply_cli_overrides_to_tasks(args)
+
     return args
+
+
+def _apply_cli_overrides_to_tasks(args: argparse.Namespace):
+    """Apply CLI argument overrides to all task configurations."""
+    if not hasattr(args, '_tasks') or not args._tasks:
+        return
+
+    # vLLM parameters that can be overridden
+    vllm_overrides = {
+        'model_path': args.model_path,
+        'host': args.host,
+        'port': args.port,
+        'tensor_parallel_size': args.tensor_parallel_size,
+        'pipeline_parallel_size': args.pipeline_parallel_size,
+        'quantization': args.quantization,
+        'rope_scaling': args.rope_scaling,
+        'max_model_len': args.max_model_len,
+        'gpu_memory_utilization': args.gpu_memory_utilization,
+        'trust_remote_code': args.trust_remote_code,
+        'dtype': args.dtype,
+        'max_num_seqs': args.max_num_seqs,
+        'enable_prefix_caching': args.enable_prefix_caching,
+        'disable_log_requests': args.disable_log_requests,
+        'tokenizer': args.tokenizer,
+        'revision': args.revision,
+        'served_model_name': args.served_model_name,
+    }
+
+    # AISBench parameters that can be overridden
+    aisbench_overrides = {
+        'mode': args.mode,
+        'max_num_workers': args.max_num_workers,
+        'num_prompts': args.num_prompts,
+        'dump_eval_details': args.dump_eval_details,
+    }
+
+    # Apply overrides to each task
+    for task in args._tasks:
+        # Override vLLM config
+        if 'vllm' in task:
+            for key, value in vllm_overrides.items():
+                if value is not None:
+                    task['vllm'][key] = value
+
+        # Override AISBench config
+        if 'aisbench' in task:
+            for key, value in aisbench_overrides.items():
+                if value is not None:
+                    task['aisbench'][key] = value
