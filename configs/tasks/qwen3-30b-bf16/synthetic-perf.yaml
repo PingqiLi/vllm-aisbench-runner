@@ -1,0 +1,33 @@
+# Task: Qwen3-30B-A3B (BF16) Performance Test
+# Synthetic dataset for throughput/latency benchmarking
+
+task:
+  name: "qwen3-30b-bf16-synthetic-perf"
+  model: "Qwen3-30B-A3B"
+  precision: "bf16"
+  dataset: "synthetic"
+  type: "performance"
+
+vllm:
+  model_path: "Qwen/Qwen3-30B-A3B"
+  host: "localhost"
+  port: 8000
+  tensor_parallel_size: 8
+  dtype: "bfloat16"
+  max_model_len: 32768
+  gpu_memory_utilization: 0.90
+  trust_remote_code: true
+  max_num_seqs: 256
+  enable_prefix_caching: true
+  timeout: 600
+
+aisbench:
+  dataset: "synthetic_gen"
+  model: "vllm_api_stream_chat"
+  mode: "perf"  # Performance mode
+  max_out_len: 2048
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42
+  max_num_workers: 16
+  dump_eval_details: true

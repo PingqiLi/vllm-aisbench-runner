@@ -15,15 +15,28 @@ configs/
 
 ### 1. 运行完整评测套件
 
+**精度评测（Accuracy）：**
 ```bash
 # BF16完整精度评测
 python run.py --config-file configs/suites/qwen3-30b-bf16-acc.yaml
 
-# W4A4量化评测 (Marlin)
+# W4A4量化评测
 python run.py --config-file configs/suites/qwen3-30b-w4a4-acc.yaml
 
-# W8A8量化评测 (FP8)
+# W8A8量化评测
 python run.py --config-file configs/suites/qwen3-30b-w8a8-acc.yaml
+```
+
+**性能评测（Performance）：**
+```bash
+# BF16性能测试
+python run.py --config-file configs/suites/qwen3-30b-bf16-perf.yaml
+
+# W4A4性能测试
+python run.py --config-file configs/suites/qwen3-30b-w4a4-perf.yaml
+
+# W8A8性能测试
+python run.py --config-file configs/suites/qwen3-30b-w8a8-perf.yaml
 ```
 
 ### 2. 运行单个任务
@@ -40,9 +53,16 @@ python run.py --config-file configs/tasks/qwen3-30b-bf16/ceval.yaml
 评测套件是**入口配置**，包含一组相关的任务。
 
 **文件列表：**
-- `qwen3-30b-bf16-acc.yaml` - BF16完整精度评测套件
-- `qwen3-30b-w4a4-acc.yaml` - W4A4量化评测套件 (Marlin)
-- `qwen3-30b-w8a8-acc.yaml` - W8A8量化评测套件 (FP8)
+
+精度评测（Accuracy）：
+- `qwen3-30b-bf16-acc.yaml` - BF16精度评测
+- `qwen3-30b-w4a4-acc.yaml` - W4A4量化评测
+- `qwen3-30b-w8a8-acc.yaml` - W8A8量化评测
+
+性能评测（Performance）：
+- `qwen3-30b-bf16-perf.yaml` - BF16性能测试
+- `qwen3-30b-w4a4-perf.yaml` - W4A4性能测试
+- `qwen3-30b-w8a8-perf.yaml` - W8A8性能测试
 
 **配置格式：**
 ```yaml
@@ -65,18 +85,23 @@ output:
 每个任务是一个**完整的模型+数据集配置**，包含所有vLLM和AISBench参数。
 
 **目录结构：**
-- `qwen3-30b-bf16/` - BF16精度任务 (TP=2, 需要2个GPU)
-- `qwen3-30b-w4a4/` - W4A4量化任务 (TP=1, 单GPU, Marlin)
-- `qwen3-30b-w8a8/` - W8A8量化任务 (TP=1, 单GPU, FP8)
+- `qwen3-30b-bf16/` - BF16精度任务
+- `qwen3-30b-w4a4/` - W4A4量化任务
+- `qwen3-30b-w8a8/` - W8A8量化任务
 
 **支持的数据集：**
+
+精度评测任务：
 - `ceval.yaml` - 中文综合评测
 - `mmlu.yaml` - 英文知识理解
 - `aime2024.yaml` - 高级数学推理
 - `gpqa.yaml` - 研究生级别科学问答
 - `math500.yaml` - 高级数学
 - `livecodebench.yaml` - 代码生成
-- `longbenchv2.yaml` - 长文本理解 (仅BF16)
+- `longbenchv2.yaml` - 长文本理解 (128k context)
+
+性能评测任务：
+- `synthetic-perf.yaml` - 合成数据性能测试 (mode=perf)
 
 **配置格式：**
 ```yaml

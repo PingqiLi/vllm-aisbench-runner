@@ -1,0 +1,19 @@
+# Performance Evaluation Suite for Qwen3-30B-A3B (W4A4)
+# Throughput and latency benchmarking - Marlin quantization
+
+suite:
+  name: "qwen3-30b-w4a4-perf"
+  description: "Performance evaluation for Qwen3-30B-A3B (W4A4 Marlin)"
+  type: "performance"
+
+# Task configurations
+tasks:
+  - "configs/tasks/qwen3-30b-w4a4/synthetic-perf.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_w4a4_perf"
+
+# Runtime options
+runtime:
+  debug: false

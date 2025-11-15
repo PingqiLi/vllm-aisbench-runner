@@ -1,0 +1,19 @@
+# Performance Evaluation Suite for Qwen3-30B-A3B (W8A8)
+# Throughput and latency benchmarking - FP8 quantization
+
+suite:
+  name: "qwen3-30b-w8a8-perf"
+  description: "Performance evaluation for Qwen3-30B-A3B (W8A8 FP8)"
+  type: "performance"
+
+# Task configurations
+tasks:
+  - "configs/tasks/qwen3-30b-w8a8/synthetic-perf.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_w8a8_perf"
+
+# Runtime options
+runtime:
+  debug: false
