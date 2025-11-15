@@ -334,7 +334,7 @@ models = [
 
     def run(self) -> int:
         """
-        Main execution flow - run each dataset separately with fresh vLLM instance.
+        Main execution flow - run each task/dataset separately with fresh vLLM instance.
 
         Returns:
             0 on success, 1 on failure
@@ -348,6 +348,101 @@ models = [
         # Save configuration snapshot
         save_config_snapshot(self.args, self.experiment_dir, self.start_time)
 
+        # Check if using new task-based architecture
+        if hasattr(self.args, '_tasks') and self.args._tasks:
+            return self.run_tasks()
+
+        # Legacy architecture - dataset-based
+        return self.run_datasets()
+
+    def run_tasks(self) -> int:
+        """Run evaluation using new task-based architecture."""
+        tasks = self.args._tasks
+        total_tasks = len(tasks)
+        failed_tasks = []
+
+        print("\n" + "=" * 80)
+        print(f"[Runner] Starting {total_tasks} task(s)")
+        print(f"[Runner] Suite: {self.args._suite_name}")
+        print("=" * 80 + "\n")
+
+        for idx, task in enumerate(tasks, 1):
+            task_name = task.get('task', {}).get('name', f'task-{idx}')
+
+            print("\n" + "=" * 80)
+            print(f"[Progress] Task {idx}/{total_tasks}: {task_name}")
+            print("=" * 80)
+
+            # Apply task configuration to args
+            self._apply_task_config(task)
+
+            # Initialize vLLM manager for this task
+            self.vllm_manager = VLLMManager(self.args, self.experiment_dir)
+
+            try:
+                # Launch vLLM with task-specific config
+                dataset_name = task.get('aisbench', {}).get('dataset')
+                if not self.vllm_manager.launch(dataset_name=dataset_name):
+                    failed_tasks.append(task_name)
+                    continue
+
+                # Run evaluation
+                success = self.run_aisbench(dataset_idx=idx, total_datasets=total_tasks)
+                if not success:
+                    failed_tasks.append(task_name)
+
+            except KeyboardInterrupt:
+                print("\n\n[Runner] Interrupted by user")
+                self.vllm_manager.shutdown()
+                return 1
+            except Exception as e:
+                print(f"[Runner] Error running {task_name}: {e}")
+                failed_tasks.append(task_name)
+            finally:
+                self.vllm_manager.shutdown()
+
+        self.end_time = datetime.now()
+        duration = (self.end_time - self.start_time).total_seconds()
+
+        print("\n" + "=" * 80)
+        print(f"[Summary] Total time: {duration:.2f}s")
+        print(f"[Summary] Completed: {total_tasks - len(failed_tasks)}/{total_tasks}")
+
+        if failed_tasks:
+            print(f"[Summary] Failed tasks: {', '.join(failed_tasks)}")
+            return 1
+
+        print("[Summary] ✓ All tasks completed successfully")
+        return 0
+
+    def _apply_task_config(self, task: Dict[str, Any]):
+        """Apply task configuration to args."""
+        # Apply vLLM config from task
+        vllm_config = task.get('vllm', {})
+        for key, value in vllm_config.items():
+            setattr(self.args, key, value)
+
+        # Apply AISBench config from task
+        ais_config = task.get('aisbench', {})
+        self.args.datasets = [ais_config.get('dataset')]
+        self.args.ais_model = ais_config.get('model')
+
+        # Set other AISBench parameters
+        if 'max_out_len' in ais_config:
+            if not hasattr(self.args, 'model_config'):
+                self.args.model_config = {}
+            self.args.model_config['max_out_len'] = ais_config['max_out_len']
+
+        if 'generation_kwargs' in ais_config:
+            if not hasattr(self.args, 'model_config'):
+                self.args.model_config = {}
+            self.args.model_config['generation_kwargs'] = ais_config['generation_kwargs']
+
+        if 'max_num_workers' in ais_config:
+            self.args.max_num_workers = ais_config['max_num_workers']
+
+    def run_datasets(self) -> int:
+        """Run evaluation using legacy dataset-based architecture."""
         # Initialize vLLM manager
         self.vllm_manager = VLLMManager(self.args, self.experiment_dir)
 

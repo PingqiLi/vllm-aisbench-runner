@@ -15,9 +15,39 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
     return config
 
 
+def load_suite_config(suite_path: str) -> Dict[str, Any]:
+    """
+    Load suite configuration (new task-based architecture).
+
+    Args:
+        suite_path: Path to suite config file
+
+    Returns:
+        Suite configuration with loaded tasks
+    """
+    suite_config = load_config_file(suite_path)
+
+    # Load all task configurations
+    task_configs = []
+    for task_path in suite_config.get('tasks', []):
+        task_config = load_config_file(task_path)
+        task_configs.append(task_config)
+
+    # Prepare merged config
+    merged = {
+        'suite': suite_config.get('suite', {}),
+        'output': suite_config.get('output', {}),
+        'runtime': suite_config.get('runtime', {}),
+        '_tasks': task_configs,  # Store all task configs
+        '_suite_name': suite_config.get('suite', {}).get('name', 'custom'),
+    }
+
+    return merged
+
+
 def load_benchmark_config(benchmark_path: str) -> Dict[str, Any]:
     """
-    Load benchmark configuration with model and dataset compositions.
+    Load benchmark configuration (legacy architecture).
 
     Args:
         benchmark_path: Path to benchmark config file
@@ -25,8 +55,13 @@ def load_benchmark_config(benchmark_path: str) -> Dict[str, Any]:
     Returns:
         Merged configuration dictionary
     """
-    # Load main benchmark config
-    benchmark_config = load_config_file(benchmark_path)
+    # Check if this is a suite config (new architecture)
+    config = load_config_file(benchmark_path)
+    if 'suite' in config:
+        return load_suite_config(benchmark_path)
+
+    # Legacy architecture
+    benchmark_config = config
 
     # Load model config
     model_config_path = benchmark_config.get('model_config')
@@ -69,6 +104,24 @@ def load_benchmark_config(benchmark_path: str) -> Dict[str, Any]:
 
 def merge_config_with_args(config: Dict[str, Any], args: argparse.Namespace) -> argparse.Namespace:
     """Merge YAML config with command line arguments (CLI args take precedence)."""
+    # Check if this is a suite config (new architecture)
+    if '_tasks' in config:
+        # Suite configuration - store tasks and set work_dir
+        args._tasks = config['_tasks']
+        args._suite_name = config['_suite_name']
+
+        # Set work_dir and debug from suite config
+        if 'work_dir' in config.get('output', {}):
+            if not args.work_dir:
+                args.work_dir = config['output']['work_dir']
+
+        if 'debug' in config.get('runtime', {}):
+            if args.debug is None:
+                args.debug = config['runtime']['debug']
+
+        return args
+
+    # Legacy architecture
     vllm_config = config.get('vllm', {})
     ais_config = config.get('aisbench', {})
 

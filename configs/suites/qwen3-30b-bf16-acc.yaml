@@ -1,0 +1,25 @@
+# Accuracy Evaluation Suite for Qwen3-30B-A3B (BF16)
+# Comprehensive accuracy benchmarks across multiple domains
+
+suite:
+  name: "qwen3-30b-bf16-acc"
+  description: "Full accuracy evaluation for Qwen3-30B-A3B (BF16)"
+  type: "accuracy"
+
+# Task configurations
+tasks:
+  - "configs/tasks/qwen3-30b-bf16/ceval.yaml"
+  - "configs/tasks/qwen3-30b-bf16/mmlu.yaml"
+  - "configs/tasks/qwen3-30b-bf16/aime2024.yaml"
+  - "configs/tasks/qwen3-30b-bf16/gpqa.yaml"
+  - "configs/tasks/qwen3-30b-bf16/math500.yaml"
+  # - "configs/tasks/qwen3-30b-bf16/livecodebench.yaml"  # TODO: Fix AISBench version_tag error
+  - "configs/tasks/qwen3-30b-bf16/longbenchv2.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_bf16_acc"
+
+# Runtime options
+runtime:
+  debug: false
