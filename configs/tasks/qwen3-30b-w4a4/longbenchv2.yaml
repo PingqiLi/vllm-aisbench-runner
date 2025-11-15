@@ -11,7 +11,7 @@ vllm:
   model_path: "Qwen/Qwen3-30B-A3B"
   host: "localhost"
   port: 8000
-  tensor_parallel_size: 1
+  tensor_parallel_size: 8
   dtype: "auto"
   quantization: "marlin"
 
@@ -33,5 +33,5 @@ aisbench:
   generation_kwargs:
     temperature: 0.0
     seed: 42
-  max_num_workers: 8
+  max_num_workers: 16
   dump_eval_details: true
