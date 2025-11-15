@@ -377,6 +377,14 @@ models = [
             original_datasets = self.args.datasets
             self.args.datasets = [dataset]
 
+            # Save original vLLM config before applying override
+            original_vllm_config = {}
+            if hasattr(self.args, '_dataset_configs'):
+                ds_cfg = self.args._dataset_configs.get(dataset, {})
+                if 'vllm_config_override' in ds_cfg:
+                    for key in ds_cfg['vllm_config_override'].keys():
+                        original_vllm_config[key] = getattr(self.args, key, None)
+
             # Check if dataset requires vLLM config override
             needs_vllm_restart = self._apply_vllm_config_override(dataset)
 
@@ -407,6 +415,10 @@ models = [
             finally:
                 self.vllm_manager.shutdown()
                 self.args.datasets = original_datasets
+
+                # Restore original vLLM config if it was overridden
+                for key, value in original_vllm_config.items():
+                    setattr(self.args, key, value)
 
         self.end_time = datetime.now()
         duration = (self.end_time - self.start_time).total_seconds()

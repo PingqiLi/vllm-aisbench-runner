@@ -14,7 +14,7 @@ datasets:
   - "configs/datasets/aime2024.yaml"
   - "configs/datasets/gpqa.yaml"
   - "configs/datasets/math500.yaml"
-  - "configs/datasets/livecodebench.yaml"
+  # - "configs/datasets/livecodebench.yaml"  # TODO: Fix version_tag error in AISBench
   - "configs/datasets/longbenchv2.yaml"
 
 output:
