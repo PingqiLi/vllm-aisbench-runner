@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from utils import (
-    load_config_file, load_benchmark_config, merge_config_with_args,
+    load_suite_config, merge_config_with_args,
     VLLMManager, save_config_snapshot, save_dataset_config,
     create_experiment_dir, rename_output_folder
 )
@@ -36,205 +36,8 @@ class BenchmarkRunner:
         self.custom_model_config_path = None
         self.vllm_manager = None
 
-    def _apply_vllm_config_override(self, dataset_name: str) -> bool:
-        """
-        Apply vLLM configuration override from dataset config if specified.
 
-        Args:
-            dataset_name: Dataset configuration name
 
-        Returns:
-            True if vLLM config was overridden (requires restart), False otherwise
-        """
-        if not hasattr(self.args, '_dataset_configs'):
-            return False
-
-        dataset_config = self.args._dataset_configs.get(dataset_name)
-        if not dataset_config or 'vllm_config_override' not in dataset_config:
-            return False
-
-        vllm_override = dataset_config['vllm_config_override']
-        print(f"[Setup] Applying vLLM config override for {dataset_name}:")
-
-        # Apply each override to args
-        for key, value in vllm_override.items():
-            # Convert config key to args attribute name
-            arg_name = key
-            old_value = getattr(self.args, arg_name, None)
-            setattr(self.args, arg_name, value)
-            print(f"  - {key}: {old_value} → {value}")
-
-        return True
-
-    def _get_dataset_recommended_max_out_len(self, dataset_name: str) -> int:
-        """
-        Get recommended max_out_len based on dataset characteristics.
-
-        Args:
-            dataset_name: Dataset configuration name
-
-        Returns:
-            Recommended max_out_len value
-        """
-        dataset_name_lower = dataset_name.lower()
-
-        # Long-form reasoning datasets need more tokens
-        if any(keyword in dataset_name_lower for keyword in ['gpqa', 'aime', 'math']):
-            return 4096
-
-        # Long context datasets
-        if 'longbench' in dataset_name_lower:
-            return 8192
-
-        # Code generation datasets
-        if 'code' in dataset_name_lower or 'livecode' in dataset_name_lower:
-            return 2048
-
-        # Standard QA datasets (CEVAL, MMLU, etc.)
-        return 2048
-
-    def _create_model_config_override(self, dataset_name: Optional[str] = None) -> Optional[str]:
-        """
-        Create a temporary model config file with overrides from YAML.
-
-        Args:
-            dataset_name: Current dataset name for auto-tuning max_out_len
-
-        Returns:
-            Path to the generated config file, or None if no overrides
-        """
-        # Get dataset-specific config if available
-        dataset_config = None
-        if dataset_name and hasattr(self.args, '_dataset_configs'):
-            dataset_config = self.args._dataset_configs.get(dataset_name)
-
-        # Start with base model_config or empty dict
-        if hasattr(self.args, 'model_config') and self.args.model_config:
-            model_config = self.args.model_config.copy()
-        elif dataset_config and 'model_config' in dataset_config:
-            # Use dataset's model_config
-            model_config = dataset_config['model_config'].copy()
-        else:
-            # No config overrides, use auto-detection
-            model_config = {}
-
-        # Override with dataset-specific config if available
-        if dataset_config and 'model_config' in dataset_config:
-            ds_model_config = dataset_config['model_config']
-            model_config.update(ds_model_config)
-            print(f"[Setup] Using dataset-specific config for {dataset_name}")
-
-        # Auto-adjust max_out_len based on dataset if not explicitly set
-        if dataset_name and 'max_out_len' not in model_config:
-            recommended_len = self._get_dataset_recommended_max_out_len(dataset_name)
-            model_config['max_out_len'] = recommended_len
-            print(f"[Setup] Auto-adjusted max_out_len to {recommended_len} for {dataset_name}")
-
-        # If still no config, return None
-        if not model_config:
-            return None
-
-        # Create temporary config directory
-        temp_config_dir = os.path.join(self.experiment_dir, "temp_model_configs")
-        os.makedirs(temp_config_dir, exist_ok=True)
-
-        # Generate model config file with dataset-specific name
-        if dataset_name:
-            # Use dataset name in config file for clarity
-            safe_dataset_name = dataset_name.replace('_gen_0_shot_cot_chat_prompt.py', '').replace('.py', '')
-            config_file = os.path.join(temp_config_dir, f"vllm_api_custom_{safe_dataset_name}.py")
-        else:
-            config_file = os.path.join(temp_config_dir, "vllm_api_custom.py")
-
-        # Extract overrides
-        overrides = {}
-        generation_kwargs_overrides = {}
-
-        for key, value in model_config.items():
-            if key == 'generation_kwargs' and isinstance(value, dict):
-                generation_kwargs_overrides = value
-            else:
-                overrides[key] = value
-
-        # Build the config file content
-        config_content = '''from ais_bench.benchmark.models import VLLMCustomAPIChat
-from ais_bench.benchmark.utils.model_postprocessors import extract_non_reasoning_content
-
-# Auto-generated model config with overrides from YAML
-models = [
-    dict(
-        attr="service",
-        type=VLLMCustomAPIChat,
-        abbr='vllm-api-custom',
-        path="",
-        model="",
-        request_rate={request_rate},
-        retry={retry},
-        host_ip="{host_ip}",
-        host_port={host_port},
-        max_out_len={max_out_len},
-        batch_size={batch_size},
-        trust_remote_code={trust_remote_code},
-        generation_kwargs=dict(
-            temperature={temperature},
-            top_k={top_k},
-            top_p={top_p},
-            seed={seed},
-            repetition_penalty={repetition_penalty},
-        ),
-        pred_postprocessor=dict(type=extract_non_reasoning_content)
-    )
-]
-'''
-
-        # Default values from vllm_api_general_chat.py
-        defaults = {
-            'host_ip': 'localhost',
-            'host_port': 8080,
-            'max_out_len': 512,
-            'batch_size': 1,
-            'request_rate': 0,
-            'retry': 2,
-            'trust_remote_code': False,
-        }
-
-        generation_defaults = {
-            'temperature': 0.5,
-            'top_k': 10,
-            'top_p': 0.95,
-            'seed': None,
-            'repetition_penalty': 1.03,
-        }
-
-        # Apply overrides
-        for key, default_value in defaults.items():
-            overrides.setdefault(key, default_value)
-
-        for key, default_value in generation_defaults.items():
-            generation_kwargs_overrides.setdefault(key, default_value)
-
-        # Format the config content
-        formatted_content = config_content.format(
-            host_ip=overrides['host_ip'],
-            host_port=overrides['host_port'],
-            max_out_len=overrides['max_out_len'],
-            batch_size=overrides['batch_size'],
-            request_rate=overrides['request_rate'],
-            retry=overrides['retry'],
-            trust_remote_code=overrides['trust_remote_code'],
-            temperature=generation_kwargs_overrides['temperature'],
-            top_k=generation_kwargs_overrides['top_k'],
-            top_p=generation_kwargs_overrides['top_p'],
-            seed=generation_kwargs_overrides['seed'],
-            repetition_penalty=generation_kwargs_overrides['repetition_penalty'],
-        )
-
-        # Write the config file
-        with open(config_file, 'w') as f:
-            f.write(formatted_content)
-
-        print(f"[Setup] Generated model config with overrides: {config_file}")
-        return config_file
 
     def build_aisbench_command(self) -> list:
         """Build the ais_bench command with all specified parameters."""
@@ -348,12 +151,8 @@ models = [
         # Save configuration snapshot
         save_config_snapshot(self.args, self.experiment_dir, self.start_time)
 
-        # Check if using new task-based architecture
-        if hasattr(self.args, '_tasks') and self.args._tasks:
-            return self.run_tasks()
-
-        # Legacy architecture - dataset-based
-        return self.run_datasets()
+        # Run task-based evaluation
+        return self.run_tasks()
 
     def run_tasks(self) -> int:
         """Run evaluation using new task-based architecture."""
@@ -441,92 +240,6 @@ models = [
         if 'max_num_workers' in ais_config:
             self.args.max_num_workers = ais_config['max_num_workers']
 
-    def run_datasets(self) -> int:
-        """Run evaluation using legacy dataset-based architecture."""
-        # Initialize vLLM manager
-        self.vllm_manager = VLLMManager(self.args, self.experiment_dir)
-
-        # Update work_dir to point to experiment directory
-        if self.experiment_dir:
-            self.args.work_dir = self.experiment_dir
-
-        datasets = self.args.datasets if self.args.datasets else []
-
-        if not datasets:
-            print("Error: No datasets specified")
-            return 1
-
-        total_datasets = len(datasets)
-        failed_datasets = []
-
-        print("\n" + "=" * 80)
-        print(f"[Runner] Starting {total_datasets} benchmark(s)")
-        print(f"[Runner] Model: {self.args.model_path}")
-        print("=" * 80 + "\n")
-
-        for idx, dataset in enumerate(datasets, 1):
-            print("\n" + "=" * 80)
-            print(f"[Progress] Dataset {idx}/{total_datasets}: {dataset}")
-            print("=" * 80)
-
-            original_datasets = self.args.datasets
-            self.args.datasets = [dataset]
-
-            # Save original vLLM config before applying override
-            original_vllm_config = {}
-            if hasattr(self.args, '_dataset_configs'):
-                ds_cfg = self.args._dataset_configs.get(dataset, {})
-                if 'vllm_config_override' in ds_cfg:
-                    for key in ds_cfg['vllm_config_override'].keys():
-                        original_vllm_config[key] = getattr(self.args, key, None)
-
-            # Check if dataset requires vLLM config override
-            needs_vllm_restart = self._apply_vllm_config_override(dataset)
-
-            # Generate dataset-specific model config if needed
-            if hasattr(self.args, 'model_config') and self.args.model_config:
-                self.custom_model_config_path = self._create_model_config_override(dataset_name=dataset)
-
-            try:
-                # Launch vLLM with dataset-specific log file
-                # If needs_vllm_restart, the config has been updated in args
-                if not self.vllm_manager.launch(dataset_name=dataset):
-                    failed_datasets.append(dataset)
-                    self.args.datasets = original_datasets
-                    continue
-
-                success = self.run_aisbench(dataset_idx=idx, total_datasets=total_datasets)
-
-                if not success:
-                    failed_datasets.append(dataset)
-
-            except KeyboardInterrupt:
-                print("\n\n[Runner] Interrupted by user")
-                self.vllm_manager.shutdown()
-                return 1
-            except Exception as e:
-                print(f"[Runner] Error running {dataset}: {e}")
-                failed_datasets.append(dataset)
-            finally:
-                self.vllm_manager.shutdown()
-                self.args.datasets = original_datasets
-
-                # Restore original vLLM config if it was overridden
-                for key, value in original_vllm_config.items():
-                    setattr(self.args, key, value)
-
-        self.end_time = datetime.now()
-        duration = (self.end_time - self.start_time).total_seconds()
-
-        print("\n" + "=" * 80)
-        print(f"[Summary] Total time: {duration:.2f}s")
-        print(f"[Summary] Completed: {total_datasets - len(failed_datasets)}/{total_datasets}")
-        if failed_datasets:
-            print(f"[Summary] Failed: {', '.join(failed_datasets)}")
-        print("=" * 80 + "\n")
-
-        return 0 if not failed_datasets else 1
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -597,27 +310,14 @@ def main():
     """Main entry point."""
     args = parse_args()
 
-    # Load config file if provided
-    if args.config_file:
-        config = load_benchmark_config(args.config_file)
-        args = merge_config_with_args(config, args)
-        # Store the config file path for reference
-        args.config_file = args.config_file
+    # Load config file (required)
+    if not args.config_file:
+        print("Error: --config-file is required")
+        print("Usage: python run.py --config-file configs/suites/qwen3-30b-bf16-acc.yaml")
+        return 1
 
-    # Validate required parameters
-    # For task-based architecture, model_path and datasets are in individual tasks
-    if hasattr(args, '_tasks') and args._tasks:
-        # Task-based architecture - no validation needed here
-        pass
-    else:
-        # Legacy architecture - require model_path and datasets
-        if not args.model_path:
-            print("Error: --model-path is required (or specify in config file)")
-            return 1
-
-        if not args.datasets:
-            print("Error: --datasets is required (or specify in config file)")
-            return 1
+    config = load_suite_config(args.config_file)
+    args = merge_config_with_args(config, args)
 
     # Run benchmarks
     runner = BenchmarkRunner(args)
