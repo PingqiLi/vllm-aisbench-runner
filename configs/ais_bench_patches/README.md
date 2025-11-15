@@ -16,9 +16,13 @@
 将配置文件复制到对应的AISBench目录中：
 
 ```bash
-# 以LongBench v2 without CoT为例
+# LongBench v2 without CoT
 cp configs/ais_bench_patches/longbenchv2/*.py \
    /path/to/ais_bench/benchmark/configs/datasets/longbenchv2/
+
+# LiveCodeBench version_tag fix
+cp configs/ais_bench_patches/livecodebench/livecodebench.py \
+   /path/to/ais_bench/benchmark/datasets/livecodebench/
 ```
 
 ### 方法2：使用脚本（待实现）
@@ -42,6 +46,26 @@ LongBench v2的without CoT配置，与Qwen3官方评测设置对齐。
 **使用场景：**
 - Qwen3官方LongBench v2评测（w/o CoT模式）
 - 需要非思考模式的长文本评测
+
+### livecodebench/
+
+LiveCodeBench的version_tag兼容性修复。
+
+**文件列表：**
+- `livecodebench.py` - 完整替换文件，修复本地数据集加载问题
+
+**问题说明：**
+HuggingFace datasets库的`version_tag`参数仅在加载远程repo时支持，加载本地jsonl文件时会报错：
+```
+ValueError: BuilderConfig doesn't have a 'version_tag' key
+```
+
+**修复方案：**
+检测数据集路径是否为本地目录，若是则跳过`version_tag`参数。
+
+**使用场景：**
+- 使用本地下载的LiveCodeBench数据集
+- 避免version_tag参数错误
 
 ## 维护说明
 
