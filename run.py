@@ -605,13 +605,19 @@ def main():
         args.config_file = args.config_file
 
     # Validate required parameters
-    if not args.model_path:
-        print("Error: --model-path is required (or specify in config file)")
-        return 1
+    # For task-based architecture, model_path and datasets are in individual tasks
+    if hasattr(args, '_tasks') and args._tasks:
+        # Task-based architecture - no validation needed here
+        pass
+    else:
+        # Legacy architecture - require model_path and datasets
+        if not args.model_path:
+            print("Error: --model-path is required (or specify in config file)")
+            return 1
 
-    if not args.datasets:
-        print("Error: --datasets is required (or specify in config file)")
-        return 1
+        if not args.datasets:
+            print("Error: --datasets is required (or specify in config file)")
+            return 1
 
     # Run benchmarks
     runner = BenchmarkRunner(args)
