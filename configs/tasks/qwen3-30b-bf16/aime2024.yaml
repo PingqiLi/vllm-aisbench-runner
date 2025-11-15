@@ -1,0 +1,32 @@
+# Task: Qwen3-30B-A3B (BF16) on AIME2024
+# Advanced math reasoning - American Invitational Mathematics Examination
+
+task:
+  name: "qwen3-30b-bf16-aime2024"
+  model: "Qwen3-30B-A3B"
+  precision: "bf16"
+  dataset: "aime2024"
+
+vllm:
+  model_path: "Qwen/Qwen3-30B-A3B"
+  host: "localhost"
+  port: 8000
+  tensor_parallel_size: 2
+  dtype: "bfloat16"
+  max_model_len: 32768
+  gpu_memory_utilization: 0.90
+  trust_remote_code: true
+  max_num_seqs: 256
+  enable_prefix_caching: true
+  timeout: 600
+
+aisbench:
+  dataset: "aime2024_gen_0_shot_chat_prompt"
+  model: "vllm_api_general_chat"
+  mode: "all"
+  max_out_len: 4096
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42
+  max_num_workers: 8
+  dump_eval_details: true
