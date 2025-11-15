@@ -1,0 +1,24 @@
+# Accuracy Evaluation Suite for Qwen3-30B-A3B (W4A4 - Marlin quantization)
+# Comprehensive accuracy benchmarks with 4-bit weight, 4-bit activation quantization
+
+suite:
+  name: "qwen3-30b-w4a4-acc"
+  description: "Full accuracy evaluation for Qwen3-30B-A3B (W4A4 Marlin)"
+  type: "accuracy"
+
+# Task configurations
+tasks:
+  - "configs/tasks/qwen3-30b-w4a4/ceval.yaml"
+  - "configs/tasks/qwen3-30b-w4a4/mmlu.yaml"
+  - "configs/tasks/qwen3-30b-w4a4/aime2024.yaml"
+  - "configs/tasks/qwen3-30b-w4a4/gpqa.yaml"
+  - "configs/tasks/qwen3-30b-w4a4/math500.yaml"
+  - "configs/tasks/qwen3-30b-w4a4/livecodebench.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_w4a4_acc"
+
+# Runtime options
+runtime:
+  debug: false

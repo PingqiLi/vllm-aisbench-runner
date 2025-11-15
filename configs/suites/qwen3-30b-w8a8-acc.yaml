@@ -1,0 +1,24 @@
+# Accuracy Evaluation Suite for Qwen3-30B-A3B (W8A8 - FP8 quantization)
+# Comprehensive accuracy benchmarks with 8-bit weight, 8-bit activation quantization
+
+suite:
+  name: "qwen3-30b-w8a8-acc"
+  description: "Full accuracy evaluation for Qwen3-30B-A3B (W8A8 FP8)"
+  type: "accuracy"
+
+# Task configurations
+tasks:
+  - "configs/tasks/qwen3-30b-w8a8/ceval.yaml"
+  - "configs/tasks/qwen3-30b-w8a8/mmlu.yaml"
+  - "configs/tasks/qwen3-30b-w8a8/aime2024.yaml"
+  - "configs/tasks/qwen3-30b-w8a8/gpqa.yaml"
+  - "configs/tasks/qwen3-30b-w8a8/math500.yaml"
+  - "configs/tasks/qwen3-30b-w8a8/livecodebench.yaml"
+
+# Output configuration
+output:
+  work_dir: "outputs/qwen3_30b_w8a8_acc"
+
+# Runtime options
+runtime:
+  debug: false

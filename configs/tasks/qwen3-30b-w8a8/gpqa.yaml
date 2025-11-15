@@ -1,0 +1,33 @@
+# Task: Qwen3-30B-A3B (W8A8) on GPQA
+# Graduate-level science Q&A with FP8 quantization
+
+task:
+  name: "qwen3-30b-w8a8-gpqa"
+  model: "Qwen3-30B-A3B"
+  precision: "w8a8"
+  dataset: "gpqa"
+
+vllm:
+  model_path: "Qwen/Qwen3-30B-A3B"
+  host: "localhost"
+  port: 8000
+  tensor_parallel_size: 1
+  dtype: "auto"
+  quantization: "fp8"
+  max_model_len: 32768
+  gpu_memory_utilization: 0.90
+  trust_remote_code: true
+  max_num_seqs: 256
+  enable_prefix_caching: true
+  timeout: 600
+
+aisbench:
+  dataset: "gpqa_diamond_gen_0_shot_cot_chat_prompt"
+  model: "vllm_api_general_chat"
+  mode: "all"
+  max_out_len: 2048
+  generation_kwargs:
+    temperature: 0.0
+    seed: 42
+  max_num_workers: 8
+  dump_eval_details: true
