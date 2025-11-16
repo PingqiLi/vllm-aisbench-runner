@@ -178,7 +178,7 @@ class VLLMManager:
                 return base_log
         else:
             # Default log location in experiment directory
-            log_dir = os.path.join(self.experiment_dir, "logs")
+            log_dir = os.path.join(self.experiment_dir, "vllm_logs")
             os.makedirs(log_dir, exist_ok=True)
 
             if dataset_name:
