@@ -70,13 +70,8 @@ class BenchmarkRunner:
         if hasattr(self.args, 'merge_ds') and self.args.merge_ds:
             cmd.append("--merge-ds")
 
-        # Work directory
-        if self.args.work_dir:
-            cmd.extend(["--work-dir", self.args.work_dir])
-        else:
-            # Default work directory with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            cmd.extend(["--work-dir", f"outputs/vllm_ais_runner_{timestamp}"])
+        # Work directory - use experiment_dir for consistency
+        cmd.extend(["--work-dir", self.experiment_dir])
 
         # Debug mode
         if self.args.debug:
