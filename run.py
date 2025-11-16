@@ -189,6 +189,11 @@ class BenchmarkRunner:
                 success = self.run_aisbench(dataset_idx=idx, total_datasets=total_tasks)
                 if not success:
                     failed_tasks.append(task_name)
+                else:
+                    # Rename output directory to dataset name on success
+                    dataset_name = task.get('task', {}).get('dataset', '')
+                    if dataset_name:
+                        rename_output_folder(self.experiment_dir, dataset_name)
 
             except KeyboardInterrupt:
                 print("\n\n[Runner] Interrupted by user")
@@ -286,7 +291,7 @@ Examples:
     vllm_group.add_argument('--revision', type=str, help='Model revision')
     vllm_group.add_argument('--served-model-name', type=str, help='Model name for API')
     vllm_group.add_argument('--vllm-extra-args', type=str, help='Additional vLLM arguments (space-separated)')
-    vllm_group.add_argument('--vllm-timeout', type=int, default=300, help='vLLM startup timeout (default: 300s)')
+    vllm_group.add_argument('--vllm-timeout', type=int, default=600, help='vLLM startup timeout (default: 600s)')
     vllm_group.add_argument('--vllm-log-file', type=str, help='vLLM log file path')
 
     # AISBench parameters

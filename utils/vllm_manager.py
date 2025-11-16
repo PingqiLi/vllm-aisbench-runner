@@ -77,12 +77,13 @@ class VLLMManager:
 
         return cmd
 
-    def wait_for_ready(self, timeout: int = 300) -> bool:
+    def wait_for_ready(self, timeout: int = 300, log_file_path: str = None) -> bool:
         """
         Wait for vLLM service to be ready by checking the health endpoint.
 
         Args:
             timeout: Maximum time to wait in seconds
+            log_file_path: Path to log file for debugging
 
         Returns:
             True if service is ready, False if timeout
@@ -107,6 +108,17 @@ class VLLMManager:
             # Check if process is still running
             if self.vllm_process and self.vllm_process.poll() is not None:
                 print("[vLLM] ✗ Process terminated unexpectedly")
+                if log_file_path:
+                    print(f"[vLLM] Check logs for details: {log_file_path}")
+                    # Show last 50 lines of log
+                    try:
+                        with open(log_file_path, 'r') as f:
+                            lines = f.readlines()
+                            last_lines = lines[-50:]
+                            print("\n[vLLM] Last 50 lines of log:")
+                            print("".join(last_lines))
+                    except Exception:
+                        pass
                 return False
 
             # Print progress every 30 seconds
@@ -193,6 +205,7 @@ class VLLMManager:
         log_file_path = self._get_log_file_path(dataset_name)
 
         print(f"\n[vLLM] Starting service... (TP={self.args.tensor_parallel_size}, dtype={self.args.dtype})")
+        print(f"[vLLM] Command: {' '.join(cmd)}")
         print(f"[vLLM] Logs: {log_file_path}")
 
         try:
@@ -213,7 +226,7 @@ class VLLMManager:
             )
 
             # Wait for service to be ready
-            if not self.wait_for_ready(timeout=self.args.vllm_timeout):
+            if not self.wait_for_ready(timeout=self.args.vllm_timeout, log_file_path=log_file_path):
                 return False
 
             return True
