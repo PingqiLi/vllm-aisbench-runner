@@ -13,7 +13,7 @@ vllm:
   port: 8000
   tensor_parallel_size: 8
   dtype: "auto"
-  quantization: "fp8"
+  quantization: "ascend"
 
   # 128k context configuration with YaRN RoPE scaling
   max_model_len: 131072
