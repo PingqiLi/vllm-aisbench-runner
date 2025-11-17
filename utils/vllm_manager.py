@@ -70,6 +70,8 @@ class VLLMManager:
             cmd.extend(["--revision", self.args.revision])
         if self.args.served_model_name:
             cmd.extend(["--served-model-name", self.args.served_model_name])
+        if hasattr(self.args, 'enforce_eager') and self.args.enforce_eager:
+            cmd.append("--enforce-eager")
 
         # Additional vLLM arguments
         if self.args.vllm_extra_args:

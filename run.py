@@ -285,7 +285,8 @@ Examples:
     vllm_group.add_argument('--tokenizer', type=str, help='Tokenizer path')
     vllm_group.add_argument('--revision', type=str, help='Model revision')
     vllm_group.add_argument('--served-model-name', type=str, help='Model name for API')
-    vllm_group.add_argument('--vllm-extra-args', type=str, help='Additional vLLM arguments (space-separated)')
+    vllm_group.add_argument('--enforce-eager', action='store_true', help='Enforce eager execution (disable CUDA graphs)')
+    vllm_group.add_argument('--vllm-extra-args', type=str, help='Additional vLLM arguments (space-separated, e.g., "--arg1 --arg2 value")')
     vllm_group.add_argument('--vllm-timeout', type=int, default=600, help='vLLM startup timeout (default: 600s)')
     vllm_group.add_argument('--vllm-log-file', type=str, help='vLLM log file path')
 

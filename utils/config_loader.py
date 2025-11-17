@@ -106,6 +106,7 @@ def _apply_cli_overrides_to_tasks(args: argparse.Namespace):
         'tokenizer': args.tokenizer,
         'revision': args.revision,
         'served_model_name': args.served_model_name,
+        'enforce_eager': args.enforce_eager,
     }
 
     # AISBench parameters that can be overridden
