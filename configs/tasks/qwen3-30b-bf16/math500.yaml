@@ -28,4 +28,5 @@ aisbench:
     temperature: 0.0
     seed: 42
   max_num_workers: 16
+  merge_ds: true
   dump_eval_details: true
