@@ -16,7 +16,6 @@ vllm:
   max_model_len: 32768
   gpu_memory_utilization: 0.90
   trust_remote_code: true
-  max_num_seqs: 256
   enable_prefix_caching: true
   timeout: 600
 
