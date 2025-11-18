@@ -240,6 +240,18 @@ class BenchmarkRunner:
         if 'max_num_workers' in ais_config:
             self.args.max_num_workers = ais_config['max_num_workers']
 
+        if 'merge_ds' in ais_config:
+            self.args.merge_ds = ais_config['merge_ds']
+
+        if 'mode' in ais_config:
+            self.args.mode = ais_config['mode']
+
+        if 'dump_eval_details' in ais_config:
+            self.args.dump_eval_details = ais_config['dump_eval_details']
+
+        if 'summarizer' in ais_config:
+            self.args.summarizer = ais_config['summarizer']
+
 
 def parse_args():
     """Parse command line arguments."""
