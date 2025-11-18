@@ -12,26 +12,19 @@ vllm:
   host: "localhost"
   port: 8000
   tensor_parallel_size: 8
-  dtype: "auto"
   quantization: "ascend"
 
   # 128k context configuration with YaRN RoPE scaling
   max_model_len: 131072
   rope_scaling: '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
 
-  gpu_memory_utilization: 0.90
-  trust_remote_code: true
-  enable_prefix_caching: true
   timeout: 600
 
 aisbench:
   dataset: "longbenchv2_gen_0_shot_chat_prompt"
   model: "vllm_api_general_chat"
   mode: "all"
-  max_out_len: 256
-  generation_kwargs:
-    temperature: 0.0
-    seed: 42
+  max_out_len: 32000
   max_num_workers: 16
   merge_ds: true
   dump_eval_details: true
