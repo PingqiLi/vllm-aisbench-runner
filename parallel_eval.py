@@ -65,37 +65,6 @@ class ParallelEvaluator:
             print("[Error] ais_bench not installed")
             sys.exit(1)
 
-    def backup_config(self, config_path: str):
-        """Backup original config."""
-        backup_path = config_path + '.parallel_backup'
-        if not os.path.exists(backup_path):
-            shutil.copy2(config_path, backup_path)
-            print(f"[Config] Backup created: {backup_path}")
-
-    def patch_config_port(self, config_path: str, port: int):
-        """Patch vllm_api_general_chat.py with specific port."""
-        with open(config_path, 'r') as f:
-            content = f.read()
-
-        # Replace host_port
-        import re
-        content = re.sub(
-            r'host_port\s*=\s*\d+',
-            f'host_port = {port}',
-            content
-        )
-
-        with open(config_path, 'w') as f:
-            f.write(content)
-
-        print(f"[Config] Patched port to {port}")
-
-    def restore_config(self, config_path: str):
-        """Restore original config."""
-        backup_path = config_path + '.parallel_backup'
-        if os.path.exists(backup_path):
-            shutil.copy2(backup_path, config_path)
-            print(f"[Config] Restored from backup")
 
     def launch_vllm(self, rank: int, port: int) -> subprocess.Popen:
         """Launch a vLLM instance on specific rank and port."""
@@ -294,27 +263,76 @@ class ParallelEvaluator:
             print(f"[Error] Failed to create custom config: {e}")
             sys.exit(1)
 
+    def create_model_config(self, instance_id: int, port: int) -> str:
+        """
+        Create a custom model config file with specific port for this instance.
+
+        Returns model config name.
+        """
+        try:
+            import ais_bench
+            ais_bench_root = os.path.dirname(ais_bench.__file__)
+            original_config = os.path.join(
+                ais_bench_root,
+                'benchmark/configs/models/vllm_api/vllm_api_general_chat.py'
+            )
+
+            # Use existing vllm_api config directory
+            vllm_api_config_dir = os.path.join(
+                ais_bench_root,
+                'benchmark/configs/models/vllm_api'
+            )
+
+            # Custom config file name with unique identifier
+            custom_config_filename = f'vllm_api_parallel_{instance_id}_general_chat.py'
+            custom_config_path = os.path.join(vllm_api_config_dir, custom_config_filename)
+
+            # Read original config and modify port
+            with open(original_config, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Replace port
+            import re
+            content = re.sub(
+                r'host_port\s*=\s*\d+',
+                f'host_port = {port}',
+                content
+            )
+
+            # Write custom config
+            with open(custom_config_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            print(f"[Config] Created custom model config for instance {instance_id}: port {port}")
+
+            # Return the config name (without .py extension)
+            model_config_name = custom_config_filename[:-3]
+
+            return model_config_name
+
+        except Exception as e:
+            print(f"[Error] Failed to create custom model config: {e}")
+            sys.exit(1)
+
     def run_ais_bench(self, instance_id: int, port: int) -> bool:
         """Run ais_bench for one instance with split dataset."""
-
-        # Patch vllm_api config to use this port
-        config_path = self.find_ais_bench_config()
-        self.patch_config_port(config_path, port)
 
         # Split dataset for this instance
         split_dataset_dir = self.split_ceval_dataset(instance_id)
 
         # Create custom dataset config pointing to split dataset
-        # Returns config name like 'ceval_parallel/ceval_split_0'
         dataset_config_name = self.create_split_dataset_config(instance_id, split_dataset_dir)
+
+        # Create custom model config with specific port (avoid race condition)
+        model_config_name = self.create_model_config(instance_id, port)
 
         # Build ais_bench command
         work_dir = os.path.join(self.output_dir, f'instance_{instance_id}')
 
         cmd = [
             'ais_bench',
-            '--models', 'vllm_api_general_chat',
-            '--datasets', dataset_config_name,  # Use config name, not path
+            '--models', model_config_name,  # Use instance-specific model config
+            '--datasets', dataset_config_name,
             '--mode', 'all',
             '--work-dir', work_dir,
             '--max-num-workers', '1',
@@ -323,6 +341,7 @@ class ParallelEvaluator:
 
         log_file = os.path.join(self.output_dir, f'ais_bench_instance{instance_id}.log')
         print(f"[AISBench] Running instance {instance_id} (port {port})")
+        print(f"[AISBench] Model config: {model_config_name}")
         print(f"[AISBench] Dataset config: {dataset_config_name}")
         print(f"[AISBench] Log: {log_file}")
 
@@ -342,16 +361,16 @@ class ParallelEvaluator:
             return False
 
     def cleanup_custom_configs(self):
-        """Clean up temporary dataset configs from ais_bench directory."""
+        """Clean up temporary dataset and model configs from ais_bench directory."""
         try:
             import ais_bench
             ais_bench_root = os.path.dirname(ais_bench.__file__)
+
+            # Remove dataset config files
             ceval_config_dir = os.path.join(
                 ais_bench_root,
                 'benchmark/configs/datasets/ceval'
             )
-
-            # Remove all parallel split config files
             for i in range(self.num_instances):
                 config_file = os.path.join(
                     ceval_config_dir,
@@ -359,7 +378,21 @@ class ParallelEvaluator:
                 )
                 if os.path.exists(config_file):
                     os.remove(config_file)
-                    print(f"[Cleanup] Removed temporary config: {config_file}")
+                    print(f"[Cleanup] Removed dataset config: {config_file}")
+
+            # Remove model config files
+            vllm_api_config_dir = os.path.join(
+                ais_bench_root,
+                'benchmark/configs/models/vllm_api'
+            )
+            for i in range(self.num_instances):
+                config_file = os.path.join(
+                    vllm_api_config_dir,
+                    f'vllm_api_parallel_{i}_general_chat.py'
+                )
+                if os.path.exists(config_file):
+                    os.remove(config_file)
+                    print(f"[Cleanup] Removed model config: {config_file}")
 
         except Exception as e:
             print(f"[Cleanup] Warning: Failed to remove temporary configs: {e}")
@@ -423,19 +456,15 @@ class ParallelEvaluator:
 
     def run(self):
         """Main execution."""
-        config_path = self.find_ais_bench_config()
-
         try:
-            # Backup config
-            self.backup_config(config_path)
-
             # Step 0: Prepare dataset splits (show info)
             print(f"\n{'='*80}")
             print("STEP 0: Dataset splitting preparation")
             print(f"{'='*80}")
             print(f"[Info] Dataset will be split across {self.num_instances} instances")
             print(f"[Info] Each instance will process every {self.num_instances}th sample")
-            print(f"[Info] Example: Instance 0 → samples 0,{self.num_instances},{ self.num_instances*2}...")
+            print(f"[Info] Example: Instance 0 → samples 0,{self.num_instances},{self.num_instances*2}...")
+            print(f"[Info] Each instance will use its own model config with unique port")
 
             # Launch all vLLM instances
             print(f"\n{'='*80}")
@@ -504,7 +533,6 @@ class ParallelEvaluator:
             return False
         finally:
             self.shutdown_vllm()
-            self.restore_config(config_path)
             self.cleanup_custom_configs()
 
 
