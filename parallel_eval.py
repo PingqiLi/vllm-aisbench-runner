@@ -247,7 +247,8 @@ class ParallelEvaluator:
 
         The config file is placed in ais_bench's ceval config directory.
 
-        Returns dataset config name (e.g., 'ceval/ceval_parallel_split_0_gen_0_shot_cot_chat_prompt').
+        Returns dataset config name (e.g., 'ceval_parallel_split_0_gen_0_shot_cot_chat_prompt').
+        Note: No directory prefix - ais_bench searches recursively.
         """
         try:
             import ais_bench
@@ -283,8 +284,9 @@ class ParallelEvaluator:
 
             print(f"[Config] Created custom dataset config: {custom_config_path}")
 
-            # Return the config name (without .py extension)
-            dataset_config_name = f'ceval/{custom_config_filename[:-3]}'
+            # Return the config name (just filename, no directory prefix)
+            # ais_bench searches recursively, so it will find it in ceval/
+            dataset_config_name = custom_config_filename[:-3]  # Remove .py extension
 
             return dataset_config_name
 
