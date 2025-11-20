@@ -23,6 +23,7 @@ from utils import (
     create_experiment_dir, rename_output_folder
 )
 from utils.ais_config_patcher import patch_vllm_api_config
+from utils.statistics import analyze_repeated_runs
 
 
 class BenchmarkRunner:
@@ -227,6 +228,10 @@ class BenchmarkRunner:
             return 1
 
         print("[Summary] ✓ All tasks completed successfully")
+
+        # Analyze repeated runs if applicable
+        self._analyze_repeated_runs(tasks)
+
         return 0
 
     def _apply_task_config(self, task: Dict[str, Any]):
@@ -296,6 +301,36 @@ class BenchmarkRunner:
             )
             if not success:
                 print("[Config Patcher] Warning: Failed to patch config, using defaults")
+
+    def _analyze_repeated_runs(self, tasks: list):
+        """
+        Analyze and report statistics for repeated benchmark runs.
+
+        Args:
+            tasks: List of task configurations
+        """
+        # Check if any tasks have run_id (indicating repeated runs)
+        tasks_with_runs = [t for t in tasks if t.get('task', {}).get('run_id')]
+
+        if not tasks_with_runs:
+            return  # No repeated runs
+
+        # Group tasks by dataset
+        dataset_runs = {}
+        for task in tasks_with_runs:
+            dataset_name = task.get('task', {}).get('dataset', '')
+            run_id = task.get('task', {}).get('run_id')
+
+            if dataset_name and run_id:
+                if dataset_name not in dataset_runs:
+                    dataset_runs[dataset_name] = []
+                dataset_runs[dataset_name].append(run_id)
+
+        # Analyze each dataset
+        for dataset_name, run_ids in dataset_runs.items():
+            run_count = len(run_ids)
+            if run_count > 1:  # Only analyze if multiple runs
+                analyze_repeated_runs(self.experiment_dir, dataset_name, run_count)
 
 
 def parse_args():
