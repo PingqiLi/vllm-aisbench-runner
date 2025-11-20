@@ -245,10 +245,9 @@ class ParallelEvaluator:
         """
         Create a custom dataset config file that points to the split dataset.
 
-        The config file is placed in ais_bench's config directory so it can be found
-        by the --datasets parameter.
+        The config file is placed in ais_bench's ceval config directory.
 
-        Returns dataset config name (e.g., 'ceval_parallel/ceval_split_0').
+        Returns dataset config name (e.g., 'ceval/ceval_parallel_split_0_gen_0_shot_cot_chat_prompt').
         """
         try:
             import ais_bench
@@ -258,16 +257,15 @@ class ParallelEvaluator:
                 'benchmark/configs/datasets/ceval/ceval_gen_0_shot_cot_chat_prompt.py'
             )
 
-            # Create custom config directory in ais_bench's config directory
-            custom_config_dir = os.path.join(
+            # Use existing ceval config directory
+            ceval_config_dir = os.path.join(
                 ais_bench_root,
-                'benchmark/configs/datasets/ceval_parallel'
+                'benchmark/configs/datasets/ceval'
             )
-            os.makedirs(custom_config_dir, exist_ok=True)
 
-            # Custom config file name includes instance ID
-            custom_config_filename = f'ceval_split_{instance_id}.py'
-            custom_config_path = os.path.join(custom_config_dir, custom_config_filename)
+            # Custom config file name with unique identifier
+            custom_config_filename = f'ceval_parallel_split_{instance_id}_gen_0_shot_cot_chat_prompt.py'
+            custom_config_path = os.path.join(ceval_config_dir, custom_config_filename)
 
             # Read original config and modify path
             with open(original_config, 'r', encoding='utf-8') as f:
@@ -279,14 +277,14 @@ class ParallelEvaluator:
                 f"path='{os.path.abspath(split_dataset_dir)}'"
             )
 
-            # Write custom config to ais_bench's config directory
+            # Write custom config to ceval directory
             with open(custom_config_path, 'w', encoding='utf-8') as f:
                 f.write(content)
 
             print(f"[Config] Created custom dataset config: {custom_config_path}")
 
-            # Return the config name that ais_bench can recognize
-            dataset_config_name = f'ceval_parallel/ceval_split_{instance_id}'
+            # Return the config name (without .py extension)
+            dataset_config_name = f'ceval/{custom_config_filename[:-3]}'
 
             return dataset_config_name
 
@@ -346,14 +344,20 @@ class ParallelEvaluator:
         try:
             import ais_bench
             ais_bench_root = os.path.dirname(ais_bench.__file__)
-            custom_config_dir = os.path.join(
+            ceval_config_dir = os.path.join(
                 ais_bench_root,
-                'benchmark/configs/datasets/ceval_parallel'
+                'benchmark/configs/datasets/ceval'
             )
 
-            if os.path.exists(custom_config_dir):
-                shutil.rmtree(custom_config_dir)
-                print(f"[Cleanup] Removed temporary configs: {custom_config_dir}")
+            # Remove all parallel split config files
+            for i in range(self.num_instances):
+                config_file = os.path.join(
+                    ceval_config_dir,
+                    f'ceval_parallel_split_{i}_gen_0_shot_cot_chat_prompt.py'
+                )
+                if os.path.exists(config_file):
+                    os.remove(config_file)
+                    print(f"[Cleanup] Removed temporary config: {config_file}")
 
         except Exception as e:
             print(f"[Cleanup] Warning: Failed to remove temporary configs: {e}")
