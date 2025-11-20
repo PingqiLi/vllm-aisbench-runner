@@ -22,6 +22,7 @@ from utils import (
     VLLMManager, save_config_snapshot, save_dataset_config,
     create_experiment_dir, rename_output_folder
 )
+from utils.ais_config_patcher import patch_vllm_api_config
 
 
 class BenchmarkRunner:
@@ -174,6 +175,9 @@ class BenchmarkRunner:
             # Apply task configuration to args
             self._apply_task_config(task)
 
+            # Patch AISBench config file with task-specific parameters
+            self._patch_ais_config(task)
+
             # Initialize vLLM manager for this task
             self.vllm_manager = VLLMManager(self.args, self.experiment_dir)
 
@@ -267,6 +271,31 @@ class BenchmarkRunner:
 
         if 'summarizer' in ais_config:
             self.args.summarizer = ais_config['summarizer']
+
+    def _patch_ais_config(self, task: Dict[str, Any]):
+        """
+        Patch AISBench vllm_api_general_chat.py with task-specific parameters.
+
+        Args:
+            task: Task configuration dictionary
+        """
+        ais_config = task.get('aisbench', {})
+
+        # Extract parameters to patch
+        batch_size = ais_config.get('batch_size')
+        max_out_len = ais_config.get('max_out_len')
+        generation_kwargs = ais_config.get('generation_kwargs')
+
+        # Only patch if at least one parameter is specified
+        if batch_size is not None or generation_kwargs is not None or max_out_len is not None:
+            print(f"\n[Config Patcher] Patching AISBench model config...")
+            success = patch_vllm_api_config(
+                batch_size=batch_size,
+                generation_kwargs=generation_kwargs,
+                max_out_len=max_out_len
+            )
+            if not success:
+                print("[Config Patcher] Warning: Failed to patch config, using defaults")
 
 
 def parse_args():
