@@ -41,6 +41,22 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
             task_config = load_config_file(task_path)
             task_configs.append(task_config)
 
+    # Get repeat count (default 1)
+    repeat_count = suite_config.get('suite', {}).get('repeat', 1)
+
+    # If repeat > 1, expand tasks with run IDs
+    if repeat_count > 1:
+        expanded_tasks = []
+        for run_id in range(1, repeat_count + 1):
+            for task in task_configs:
+                # Create a copy of the task with run_id
+                task_copy = task.copy()
+                if 'task' not in task_copy:
+                    task_copy['task'] = {}
+                task_copy['task']['run_id'] = run_id
+                expanded_tasks.append(task_copy)
+        task_configs = expanded_tasks
+
     # Prepare merged config
     merged = {
         'suite': suite_config.get('suite', {}),
@@ -48,6 +64,7 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
         'runtime': suite_config.get('runtime', {}),
         '_tasks': task_configs,
         '_suite_name': suite_config.get('suite', {}).get('name', 'custom'),
+        '_repeat': repeat_count,
     }
 
     return merged

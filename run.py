@@ -162,9 +162,13 @@ class BenchmarkRunner:
 
         for idx, task in enumerate(tasks, 1):
             task_name = task.get('task', {}).get('name', f'task-{idx}')
+            run_id = task.get('task', {}).get('run_id')
+
+            # Add run_id to display name if present
+            display_name = f"{task_name} (run {run_id})" if run_id else task_name
 
             print("\n" + "=" * 80)
-            print(f"[Progress] Task {idx}/{total_tasks}: {task_name}")
+            print(f"[Progress] Task {idx}/{total_tasks}: {display_name}")
             print("=" * 80)
 
             # Apply task configuration to args
@@ -187,8 +191,15 @@ class BenchmarkRunner:
                 else:
                     # Rename output directory to dataset name on success
                     dataset_name = task.get('task', {}).get('dataset', '')
+                    run_id = task.get('task', {}).get('run_id')
+
                     if dataset_name:
-                        rename_output_folder(self.experiment_dir, dataset_name)
+                        # Add run_id suffix if this is a repeated run
+                        if run_id:
+                            output_name = f"{dataset_name}_{run_id}"
+                        else:
+                            output_name = dataset_name
+                        rename_output_folder(self.experiment_dir, output_name)
 
             except KeyboardInterrupt:
                 print("\n\n[Runner] Interrupted by user")
@@ -239,6 +250,11 @@ class BenchmarkRunner:
 
         if 'max_num_workers' in ais_config:
             self.args.max_num_workers = ais_config['max_num_workers']
+
+        if 'batch_size' in ais_config:
+            if not hasattr(self.args, 'model_config'):
+                self.args.model_config = {}
+            self.args.model_config['batch_size'] = ais_config['batch_size']
 
         if 'merge_ds' in ais_config:
             self.args.merge_ds = ais_config['merge_ds']

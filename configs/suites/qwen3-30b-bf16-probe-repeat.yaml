@@ -1,0 +1,17 @@
+# Suite: qwen3-30b-bf16-probe-repeat
+# Repeat AIME2024 probe test 5 times for reliability testing
+
+suite:
+  name: qwen3-30b-bf16-probe-repeat
+  description: "AIME2024 probe test repeated 5 times (BF16, TP=4, batch_size=8)"
+  type: probe
+  repeat: 5  # Run each task 5 times
+
+tasks:
+  - configs/tasks/qwen3-30b-bf16/aime2024_probe.yaml
+
+output:
+  work_dir: outputs/qwen3_30b_bf16_probe_repeat
+
+runtime:
+  debug: false

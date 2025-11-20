@@ -1,0 +1,25 @@
+# Task: qwen3-30b-bf16-aime2024-probe
+# AIME 2024 probe test with BF16 (TP=4, batch_size=8)
+
+task:
+  name: qwen3-30b-bf16-aime2024-probe
+  model: Qwen3-30B-A3B
+  precision: bf16
+  dataset: aime2024
+
+vllm:
+  model_path: Qwen/Qwen3-30B-A3B
+  host: localhost
+  port: 8000
+  tensor_parallel_size: 4
+  max_model_len: 32768
+  timeout: 600
+
+aisbench:
+  dataset: aime2024_gen_0_shot_chat_prompt
+  model: vllm_api_general_chat
+  mode: all
+  max_out_len: 32000
+  batch_size: 8
+  merge_ds: true
+  dump_eval_details: true
