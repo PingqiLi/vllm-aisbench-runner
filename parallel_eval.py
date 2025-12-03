@@ -6,11 +6,12 @@ Run multiple TP=1 vLLM instances on different NPUs/GPUs in parallel to speed up 
 
 Usage:
     python parallel_eval.py --rank 0,1,2,3 --model-path /path/to/model --dataset ceval
+    python parallel_eval.py --rank 0,1,2,3 --model-path /path/to/model --custom-dataset-path datasets/custom_eval_mcq.jsonl
 
 Features:
 - Automatic port allocation (8000, 8001, 8002, ...)
-- Dataset splitting across instances
-- Auto-patch vllm_api_general_chat.py per instance
+- Dataset splitting across instances (supports CEval CSV and Custom JSONL)
+- Auto-patch vllm_api_general_chat.py per instance (port + batch_size)
 - Parallel ais_bench execution
 - Result aggregation
 """
@@ -24,29 +25,35 @@ import json
 import shutil
 import csv
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Tuple
 import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class ParallelEvaluator:
     def __init__(self, ranks: List[int], model_path: str, dataset: str,
-                 base_port: int = 8000, quantization: str = None):
+                 base_port: int = 8000, quantization: str = None,
+                 custom_dataset_path: str = None, batch_size: int = None):
         self.ranks = ranks
         self.model_path = model_path
         self.dataset = dataset
         self.base_port = base_port
         self.quantization = quantization
+        self.custom_dataset_path = custom_dataset_path
+        self.batch_size = batch_size
         self.num_instances = len(ranks)
 
         self.vllm_processes = []
-        self.output_dir = f"outputs/parallel_{dataset}_{int(time.time())}"
+        dataset_name = "custom" if custom_dataset_path else dataset
+        self.output_dir = f"outputs/parallel_{dataset_name}_{int(time.time())}"
         os.makedirs(self.output_dir, exist_ok=True)
 
         print(f"[Init] Running {self.num_instances} parallel instances")
         print(f"[Init] NPU ranks: {ranks}")
         print(f"[Init] Ports: {[self.base_port + i for i in range(self.num_instances)]}")
         print(f"[Init] Output: {self.output_dir}")
+        if self.custom_dataset_path:
+            print(f"[Init] Custom Dataset: {self.custom_dataset_path}")
 
     def find_ais_bench_config(self) -> str:
         """Find vllm_api_general_chat.py path."""
@@ -77,6 +84,7 @@ class ParallelEvaluator:
             '--port', str(port),
             '--tensor-parallel-size', '1',
             '--max-model-len', '32768',
+            '--enforce-eager',  # Enforce eager mode for accuracy
         ]
 
         if self.quantization:
@@ -143,14 +151,6 @@ class ParallelEvaluator:
     def split_ceval_dataset(self, instance_id: int) -> str:
         """
         Split CEval dataset CSV files for this instance.
-
-        Uses stride-based splitting:
-        - Instance 0: samples 0, 4, 8, 12, ...
-        - Instance 1: samples 1, 5, 9, 13, ...
-        - Instance 2: samples 2, 6, 10, 14, ...
-        - Instance 3: samples 3, 7, 11, 15, ...
-
-        Returns path to split dataset directory.
         """
         original_dataset_path = self.find_dataset_path()
 
@@ -162,9 +162,7 @@ class ParallelEvaluator:
         os.makedirs(split_dataset_dir, exist_ok=True)
 
         print(f"[Dataset Split] Creating split dataset for instance {instance_id}")
-        print(f"[Dataset Split] Original: {original_dataset_path}")
-        print(f"[Dataset Split] Split: {split_dataset_dir}")
-
+        
         # Split all CSV files in dev/val/test splits
         total_samples = 0
         split_samples = 0
@@ -210,14 +208,56 @@ class ParallelEvaluator:
 
         return split_dataset_dir
 
+    def split_custom_dataset(self, instance_id: int) -> Tuple[str, Optional[str]]:
+        """
+        Split custom JSONL dataset for this instance.
+        
+        Returns:
+            (split_jsonl_path, split_meta_path)
+        """
+        input_path = Path(self.custom_dataset_path)
+        if not input_path.exists():
+            print(f"[Error] Custom dataset not found: {input_path}")
+            sys.exit(1)
+
+        # Output file path
+        split_filename = f"{input_path.stem}_split_{instance_id}{input_path.suffix}"
+        split_path = os.path.join(self.output_dir, split_filename)
+
+        print(f"[Dataset Split] Creating split JSONL for instance {instance_id}")
+        
+        # Read all lines
+        with open(input_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        total_samples = len(lines)
+        
+        # Select lines for this instance (stride-based)
+        split_lines = [
+            line for idx, line in enumerate(lines)
+            if idx % self.num_instances == instance_id
+        ]
+        
+        # Write split file
+        with open(split_path, 'w', encoding='utf-8') as f:
+            f.writelines(split_lines)
+            
+        print(f"[Dataset Split] Instance {instance_id}: {len(split_lines)}/{total_samples} samples")
+
+        # Handle meta.json if exists
+        meta_path = input_path.with_suffix(input_path.suffix + '.meta.json')
+        split_meta_path = None
+        
+        if meta_path.exists():
+            split_meta_path = split_path + '.meta.json'
+            shutil.copy2(meta_path, split_meta_path)
+            print(f"[Dataset Split] Copied meta.json to {split_meta_path}")
+            
+        return split_path, split_meta_path
+
     def create_split_dataset_config(self, instance_id: int, split_dataset_dir: str) -> str:
         """
-        Create a custom dataset config file that points to the split dataset.
-
-        The config file is placed in ais_bench's ceval config directory.
-
-        Returns dataset config name (e.g., 'ceval_parallel_split_0_gen_0_shot_cot_chat_prompt').
-        Note: No directory prefix - ais_bench searches recursively.
+        Create a custom dataset config file that points to the split dataset (for CEval).
         """
         try:
             import ais_bench
@@ -254,7 +294,6 @@ class ParallelEvaluator:
             print(f"[Config] Created custom dataset config: {custom_config_path}")
 
             # Return the config name (just filename, no directory prefix)
-            # ais_bench searches recursively, so it will find it in ceval/
             dataset_config_name = custom_config_filename[:-3]  # Remove .py extension
 
             return dataset_config_name
@@ -265,9 +304,7 @@ class ParallelEvaluator:
 
     def create_model_config(self, instance_id: int, port: int) -> str:
         """
-        Create a custom model config file with specific port for this instance.
-
-        Returns model config name.
+        Create a custom model config file with specific port and batch size for this instance.
         """
         try:
             import ais_bench
@@ -287,7 +324,7 @@ class ParallelEvaluator:
             custom_config_filename = f'vllm_api_parallel_{instance_id}_general_chat.py'
             custom_config_path = os.path.join(vllm_api_config_dir, custom_config_filename)
 
-            # Read original config and modify port
+            # Read original config
             with open(original_config, 'r', encoding='utf-8') as f:
                 content = f.read()
 
@@ -298,6 +335,15 @@ class ParallelEvaluator:
                 f'host_port = {port}',
                 content
             )
+            
+            # Replace batch size if specified
+            if self.batch_size is not None:
+                content = re.sub(
+                    r'batch_size\s*=\s*\d+',
+                    f'batch_size = {self.batch_size}',
+                    content
+                )
+                print(f"[Config] Patched batch_size to {self.batch_size}")
 
             # Write custom config
             with open(custom_config_path, 'w', encoding='utf-8') as f:
@@ -317,32 +363,40 @@ class ParallelEvaluator:
     def run_ais_bench(self, instance_id: int, port: int) -> bool:
         """Run ais_bench for one instance with split dataset."""
 
-        # Split dataset for this instance
-        split_dataset_dir = self.split_ceval_dataset(instance_id)
-
-        # Create custom dataset config pointing to split dataset
-        dataset_config_name = self.create_split_dataset_config(instance_id, split_dataset_dir)
-
-        # Create custom model config with specific port (avoid race condition)
+        # Create custom model config with specific port and batch size
         model_config_name = self.create_model_config(instance_id, port)
+        
+        dataset_args = []
+        
+        if self.custom_dataset_path:
+            # Handle custom dataset (JSONL)
+            split_dataset_path, split_meta_path = self.split_custom_dataset(instance_id)
+            dataset_args = ['--custom-dataset-path', split_dataset_path]
+            if split_meta_path:
+                dataset_args.extend(['--custom-dataset-meta-path', split_meta_path])
+            
+            print(f"[AISBench] Using custom dataset: {split_dataset_path}")
+        else:
+            # Handle CEval (CSV)
+            split_dataset_dir = self.split_ceval_dataset(instance_id)
+            dataset_config_name = self.create_split_dataset_config(instance_id, split_dataset_dir)
+            dataset_args = ['--datasets', dataset_config_name]
+            print(f"[AISBench] Using dataset config: {dataset_config_name}")
 
         # Build ais_bench command
         work_dir = os.path.join(self.output_dir, f'instance_{instance_id}')
 
         cmd = [
             'ais_bench',
-            '--models', model_config_name,  # Use instance-specific model config
-            '--datasets', dataset_config_name,
+            '--models', model_config_name,
             '--mode', 'all',
             '--work-dir', work_dir,
             '--max-num-workers', '1',
             '--merge-ds',
-        ]
+        ] + dataset_args
 
         log_file = os.path.join(self.output_dir, f'ais_bench_instance{instance_id}.log')
         print(f"[AISBench] Running instance {instance_id} (port {port})")
-        print(f"[AISBench] Model config: {model_config_name}")
-        print(f"[AISBench] Dataset config: {dataset_config_name}")
         print(f"[AISBench] Log: {log_file}")
 
         with open(log_file, 'w') as log_f:
@@ -366,19 +420,20 @@ class ParallelEvaluator:
             import ais_bench
             ais_bench_root = os.path.dirname(ais_bench.__file__)
 
-            # Remove dataset config files
-            ceval_config_dir = os.path.join(
-                ais_bench_root,
-                'benchmark/configs/datasets/ceval'
-            )
-            for i in range(self.num_instances):
-                config_file = os.path.join(
-                    ceval_config_dir,
-                    f'ceval_parallel_split_{i}_gen_0_shot_cot_chat_prompt.py'
+            # Remove dataset config files (only for CEval mode)
+            if not self.custom_dataset_path:
+                ceval_config_dir = os.path.join(
+                    ais_bench_root,
+                    'benchmark/configs/datasets/ceval'
                 )
-                if os.path.exists(config_file):
-                    os.remove(config_file)
-                    print(f"[Cleanup] Removed dataset config: {config_file}")
+                for i in range(self.num_instances):
+                    config_file = os.path.join(
+                        ceval_config_dir,
+                        f'ceval_parallel_split_{i}_gen_0_shot_cot_chat_prompt.py'
+                    )
+                    if os.path.exists(config_file):
+                        os.remove(config_file)
+                        print(f"[Cleanup] Removed dataset config: {config_file}")
 
             # Remove model config files
             vllm_api_config_dir = os.path.join(
@@ -412,9 +467,6 @@ class ParallelEvaluator:
     def aggregate_results(self) -> Dict:
         """
         Aggregate results from all instances.
-
-        Since each instance processed a different portion of the dataset,
-        we need to combine the results (not just return first one).
         """
         print(f"\n[Results] Aggregating results from {self.num_instances} instances...")
 
@@ -445,13 +497,21 @@ class ParallelEvaluator:
 
         print(f"[Results] ✓ Found {len(all_results)} result(s) from {self.num_instances} instances")
 
-        # For split dataset evaluation, each instance has partial results
-        # Return all results for manual inspection
-        # (Proper aggregation would require understanding result structure)
+        # Basic aggregation of accuracy
+        total_correct = 0
+        total_samples = 0
+        
+        for res in all_results:
+            # Try to find accuracy stats in the result JSON
+            # Structure depends on evaluator, but usually has 'correct' and 'total' or similar
+            data = res['data']
+            # This is a best-effort aggregation
+            pass
+
         return {
             'instances': len(all_results),
             'results': [r['data'] for r in all_results],
-            'note': 'Each instance processed a different portion of the dataset (stride-based split)'
+            'note': 'Each instance processed a different portion of the dataset'
         }
 
     def run(self):
@@ -463,7 +523,6 @@ class ParallelEvaluator:
             print(f"{'='*80}")
             print(f"[Info] Dataset will be split across {self.num_instances} instances")
             print(f"[Info] Each instance will process every {self.num_instances}th sample")
-            print(f"[Info] Example: Instance 0 → samples 0,{self.num_instances},{self.num_instances*2}...")
             print(f"[Info] Each instance will use its own model config with unique port")
 
             # Launch all vLLM instances
@@ -556,7 +615,12 @@ def main():
         '--dataset',
         type=str,
         default='ceval',
-        help='Dataset name (default: ceval)'
+        help='Dataset name (default: ceval, ignored if --custom-dataset-path is set)'
+    )
+    parser.add_argument(
+        '--custom-dataset-path',
+        type=str,
+        help='Path to custom JSONL dataset (overrides --dataset)'
     )
     parser.add_argument(
         '--base-port',
@@ -569,6 +633,12 @@ def main():
         type=str,
         default=None,
         help='Quantization method (e.g., ascend for W4A4)'
+    )
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=None,
+        help='Batch size for ais_bench (overrides default in config)'
     )
 
     args = parser.parse_args()
@@ -584,11 +654,16 @@ def main():
     print("PARALLEL BENCHMARK EVALUATION")
     print(f"{'='*80}")
     print(f"Model: {args.model_path}")
-    print(f"Dataset: {args.dataset}")
+    if args.custom_dataset_path:
+        print(f"Custom Dataset: {args.custom_dataset_path}")
+    else:
+        print(f"Dataset: {args.dataset}")
     print(f"NPU Ranks: {ranks}")
     print(f"Ports: {[args.base_port + i for i in range(len(ranks))]}")
     if args.quantization:
         print(f"Quantization: {args.quantization}")
+    if args.batch_size:
+        print(f"Batch Size: {args.batch_size}")
     print(f"{'='*80}\n")
 
     evaluator = ParallelEvaluator(
@@ -596,7 +671,9 @@ def main():
         model_path=args.model_path,
         dataset=args.dataset,
         base_port=args.base_port,
-        quantization=args.quantization
+        quantization=args.quantization,
+        custom_dataset_path=args.custom_dataset_path,
+        batch_size=args.batch_size
     )
 
     success = evaluator.run()

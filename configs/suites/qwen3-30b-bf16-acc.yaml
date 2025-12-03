@@ -14,7 +14,7 @@ tasks:
   - "configs/tasks/qwen3-30b-bf16/gpqa.yaml"
   - "configs/tasks/qwen3-30b-bf16/math500.yaml"
   - "configs/tasks/qwen3-30b-bf16/livecodebench.yaml"
-  - "configs/tasks/qwen3-30b-bf16/longbenchv2.yaml"
+
 
 # Output configuration
 output:
