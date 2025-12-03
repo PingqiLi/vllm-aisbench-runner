@@ -179,14 +179,14 @@ echo ""
 echo "======================================"
 echo "Dataset 6/7: LiveCodeBench"
 echo "======================================"
-if [ -d "livecodebench" ]; then
+if [ -d "code_generation_lite" ]; then
     echo -e "${YELLOW}LiveCodeBench already exists, skipping...${NC}"
 else
     if [ "$HF_CLI_AVAILABLE" = true ]; then
         echo "Downloading LiveCodeBench using huggingface-cli..."
         huggingface-cli download \
             --repo-type dataset \
-            --local-dir livecodebench \
+            --local-dir code_generation_lite \
             livecodebench/code_generation_lite
         echo -e "${GREEN}LiveCodeBench downloaded successfully${NC}"
     else
@@ -194,7 +194,7 @@ else
         echo -e "${YELLOW}To download manually:${NC}"
         echo -e "${YELLOW}  pip install huggingface_hub${NC}"
         echo -e "${YELLOW}  cd $DATASETS_DIR${NC}"
-        echo -e "${YELLOW}  huggingface-cli download --repo-type dataset --local-dir livecodebench livecodebench/code_generation_lite${NC}"
+        echo -e "${YELLOW}  huggingface-cli download --repo-type dataset --local-dir code_generation_lite livecodebench/code_generation_lite${NC}"
     fi
 fi
 
@@ -233,7 +233,7 @@ echo "  3. AIME2024:      $DATASETS_DIR/aime/aime.jsonl"
 echo "  4. GPQA:          $DATASETS_DIR/gpqa/*.csv"
 echo "  5. MATH500:       $DATASETS_DIR/math/math.json"
 if [ "$HF_CLI_AVAILABLE" = true ]; then
-    echo "  6. LiveCodeBench: $DATASETS_DIR/livecodebench/"
+    echo "  6. LiveCodeBench: $DATASETS_DIR/code_generation_lite/"
     echo "  7. LongBenchV2:   $DATASETS_DIR/LongBench-v2/"
 else
     echo "  6. LiveCodeBench: (skipped - install huggingface-cli to enable)"
