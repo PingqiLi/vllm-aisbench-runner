@@ -410,18 +410,18 @@ class DatasetSampler:
     def save_datasets(self, mcq_data: List[Dict[str, Any]],
                       math_qa_data: List[Dict[str, Any]],
                       code_qa_data: List[Dict[str, Any]],
-                      output_prefix: str):
-        """Save MCQ and QA datasets to separate JSONL files."""
-        output_path = Path(output_prefix)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+                      output_dir: str):
+        """Save MCQ and QA datasets to separate JSONL files in a directory."""
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
 
         # Determine output file paths
-        mcq_file = output_path.parent / f"{output_path.name}_mcq.jsonl"
-        math_qa_file = output_path.parent / f"{output_path.name}_math_qa.jsonl"
-        code_qa_file = output_path.parent / f"{output_path.name}_code_qa.jsonl"
+        mcq_file = output_path / "mcq.jsonl"
+        math_qa_file = output_path / "math_qa.jsonl"
+        code_qa_file = output_path / "code_qa.jsonl"
 
         print(f"\n{'='*80}")
-        print(f"Saving datasets...")
+        print(f"Saving datasets to directory: {output_path}")
         print(f"{'='*80}\n")
 
         # Save MCQ dataset
@@ -451,6 +451,16 @@ class DatasetSampler:
                 for item in math_qa_data:
                     f.write(json.dumps(item, ensure_ascii=False) + '\n')
             print(f"✓ MATH-QA dataset: {len(math_qa_data)} samples → {math_qa_file}")
+
+            # Copy meta template
+            import shutil
+            template_path = Path(__file__).parent / 'math_qa_meta_template.json'
+            if template_path.exists():
+                meta_dest = output_path / "math_qa.jsonl.meta.json"
+                shutil.copy2(template_path, meta_dest)
+                print(f"✓ Copied meta file: {meta_dest}")
+            else:
+                print(f"⚠ Warning: Meta template not found at {template_path}")
 
             # Print MATH-QA statistics
             math_qa_counts = {}
@@ -530,8 +540,8 @@ def main():
         '--output',
         type=str,
         default='datasets/custom_sampled_eval',
-        help='Output file path prefix (default: datasets/custom_sampled_eval). '
-             'Will generate *_mcq.jsonl and *_qa.jsonl files.'
+        help='Output directory path (default: datasets/custom_sampled_eval). '
+             'Will generate mcq.jsonl, math_qa.jsonl, etc. inside this directory.'
     )
     parser.add_argument(
         '--gpqa-count',

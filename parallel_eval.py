@@ -39,21 +39,43 @@ class ParallelEvaluator:
         self.dataset = dataset
         self.base_port = base_port
         self.quantization = quantization
-        self.custom_dataset_path = custom_dataset_path
+        
+        # Support multiple custom datasets (comma separated or directory)
+        if custom_dataset_path:
+            path_obj = Path(custom_dataset_path)
+            if path_obj.is_dir():
+                # If directory, find all .jsonl files
+                self.custom_datasets = sorted([str(p) for p in path_obj.glob('*.jsonl')])
+                print(f"[Init] Found {len(self.custom_datasets)} JSONL files in {custom_dataset_path}")
+            else:
+                # Comma separated list of files
+                self.custom_datasets = [p.strip() for p in custom_dataset_path.split(',')]
+        else:
+            self.custom_datasets = []
+            
         self.batch_size = batch_size
         self.num_instances = len(ranks)
 
         self.vllm_processes = []
-        dataset_name = "custom" if custom_dataset_path else dataset
+        
+        # Output directory setup
+        if self.custom_datasets:
+            dataset_name = "custom_suite"
+        else:
+            dataset_name = dataset
+            
         self.output_dir = f"outputs/parallel_{dataset_name}_{int(time.time())}"
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Track sample counts for aggregation: {dataset_path: {instance_id: count}}
+        self.split_counts = {} 
 
         print(f"[Init] Running {self.num_instances} parallel instances")
         print(f"[Init] NPU ranks: {ranks}")
         print(f"[Init] Ports: {[self.base_port + i for i in range(self.num_instances)]}")
         print(f"[Init] Output: {self.output_dir}")
-        if self.custom_dataset_path:
-            print(f"[Init] Custom Dataset: {self.custom_dataset_path}")
+        if self.custom_datasets:
+            print(f"[Init] Custom Datasets: {self.custom_datasets}")
 
     def find_ais_bench_config(self) -> str:
         """Find vllm_api_general_chat.py path."""
@@ -208,23 +230,27 @@ class ParallelEvaluator:
 
         return split_dataset_dir
 
-    def split_custom_dataset(self, instance_id: int) -> Tuple[str, Optional[str]]:
+    def split_custom_dataset(self, dataset_path_str: str, instance_id: int) -> Tuple[str, Optional[str], int]:
         """
         Split custom JSONL dataset for this instance.
         
         Returns:
-            (split_jsonl_path, split_meta_path)
+            (split_jsonl_path, split_meta_path, sample_count)
         """
-        input_path = Path(self.custom_dataset_path)
+        input_path = Path(dataset_path_str)
         if not input_path.exists():
             print(f"[Error] Custom dataset not found: {input_path}")
             sys.exit(1)
 
-        # Output file path
-        split_filename = f"{input_path.stem}_split_{instance_id}{input_path.suffix}"
-        split_path = os.path.join(self.output_dir, split_filename)
+        # Output file path: outputs/parallel_xxx/dataset_name/split_x.jsonl
+        dataset_name = input_path.stem
+        dataset_out_dir = os.path.join(self.output_dir, dataset_name)
+        os.makedirs(dataset_out_dir, exist_ok=True)
+        
+        split_filename = f"{dataset_name}_split_{instance_id}{input_path.suffix}"
+        split_path = os.path.join(dataset_out_dir, split_filename)
 
-        print(f"[Dataset Split] Creating split JSONL for instance {instance_id}")
+        print(f"[Dataset Split] Processing {dataset_name} for instance {instance_id}")
         
         # Read all lines
         with open(input_path, 'r', encoding='utf-8') as f:
@@ -242,8 +268,6 @@ class ParallelEvaluator:
         with open(split_path, 'w', encoding='utf-8') as f:
             f.writelines(split_lines)
             
-        print(f"[Dataset Split] Instance {instance_id}: {len(split_lines)}/{total_samples} samples")
-
         # Handle meta.json if exists
         meta_path = input_path.with_suffix(input_path.suffix + '.meta.json')
         split_meta_path = None
@@ -251,9 +275,8 @@ class ParallelEvaluator:
         if meta_path.exists():
             split_meta_path = split_path + '.meta.json'
             shutil.copy2(meta_path, split_meta_path)
-            print(f"[Dataset Split] Copied meta.json to {split_meta_path}")
             
-        return split_path, split_meta_path
+        return split_path, split_meta_path, len(split_lines)
 
     def create_split_dataset_config(self, instance_id: int, split_dataset_dir: str) -> str:
         """
@@ -290,8 +313,6 @@ class ParallelEvaluator:
             # Write custom config to ceval directory
             with open(custom_config_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-
-            print(f"[Config] Created custom dataset config: {custom_config_path}")
 
             # Return the config name (just filename, no directory prefix)
             dataset_config_name = custom_config_filename[:-3]  # Remove .py extension
@@ -343,13 +364,10 @@ class ParallelEvaluator:
                     f'batch_size = {self.batch_size}',
                     content
                 )
-                print(f"[Config] Patched batch_size to {self.batch_size}")
 
             # Write custom config
             with open(custom_config_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-
-            print(f"[Config] Created custom model config for instance {instance_id}: port {port}")
 
             # Return the config name (without .py extension)
             model_config_name = custom_config_filename[:-3]
@@ -360,45 +378,78 @@ class ParallelEvaluator:
             print(f"[Error] Failed to create custom model config: {e}")
             sys.exit(1)
 
-    def run_ais_bench(self, instance_id: int, port: int) -> bool:
-        """Run ais_bench for one instance with split dataset."""
-
+    def run_worker(self, instance_id: int, port: int) -> bool:
+        """
+        Worker function for a single parallel instance.
+        Runs ais_bench for each dataset sequentially.
+        """
         # Create custom model config with specific port and batch size
         model_config_name = self.create_model_config(instance_id, port)
         
-        dataset_args = []
+        success = True
         
-        if self.custom_dataset_path:
-            # Handle custom dataset (JSONL)
-            split_dataset_path, split_meta_path = self.split_custom_dataset(instance_id)
-            dataset_args = ['--custom-dataset-path', split_dataset_path]
-            if split_meta_path:
-                dataset_args.extend(['--custom-dataset-meta-path', split_meta_path])
-            
-            print(f"[AISBench] Using custom dataset: {split_dataset_path}")
+        # 1. Handle Custom Datasets (List)
+        if self.custom_datasets:
+            for dataset_path in self.custom_datasets:
+                try:
+                    # Split dataset
+                    split_dataset_path, split_meta_path, sample_count = self.split_custom_dataset(dataset_path, instance_id)
+                    
+                    # Record sample count for aggregation
+                    if dataset_path not in self.split_counts:
+                        self.split_counts[dataset_path] = {}
+                    self.split_counts[dataset_path][instance_id] = sample_count
+                    
+                    if sample_count == 0:
+                        print(f"[Worker {instance_id}] Skipping empty split for {dataset_path}")
+                        continue
+
+                    # Prepare ais_bench args
+                    dataset_args = ['--custom-dataset-path', split_dataset_path]
+                    if split_meta_path:
+                        dataset_args.extend(['--custom-dataset-meta-path', split_meta_path])
+                    
+                    # Output directory: outputs/parallel_xxx/dataset_name/instance_x
+                    dataset_name = Path(dataset_path).stem
+                    work_dir = os.path.join(self.output_dir, dataset_name, f'instance_{instance_id}')
+                    
+                    print(f"[Worker {instance_id}] Running {dataset_name} ({sample_count} samples)")
+                    
+                    if not self._run_ais_bench_cmd(instance_id, model_config_name, work_dir, dataset_args):
+                        success = False
+                        
+                except Exception as e:
+                    print(f"[Worker {instance_id}] Error processing {dataset_path}: {e}")
+                    success = False
+
+        # 2. Handle CEval (Standard)
         else:
-            # Handle CEval (CSV)
             split_dataset_dir = self.split_ceval_dataset(instance_id)
             dataset_config_name = self.create_split_dataset_config(instance_id, split_dataset_dir)
             dataset_args = ['--datasets', dataset_config_name]
-            print(f"[AISBench] Using dataset config: {dataset_config_name}")
+            
+            work_dir = os.path.join(self.output_dir, 'ceval', f'instance_{instance_id}')
+            print(f"[Worker {instance_id}] Running CEval")
+            
+            if not self._run_ais_bench_cmd(instance_id, model_config_name, work_dir, dataset_args):
+                success = False
 
-        # Build ais_bench command
-        work_dir = os.path.join(self.output_dir, f'instance_{instance_id}')
+        return success
 
+    def _run_ais_bench_cmd(self, instance_id: int, model_config: str, work_dir: str, dataset_args: List[str]) -> bool:
+        """Helper to execute ais_bench command."""
         cmd = [
             'ais_bench',
-            '--models', model_config_name,
+            '--models', model_config,
             '--mode', 'all',
             '--work-dir', work_dir,
             '--max-num-workers', '1',
             '--merge-ds',
         ] + dataset_args
 
-        log_file = os.path.join(self.output_dir, f'ais_bench_instance{instance_id}.log')
-        print(f"[AISBench] Running instance {instance_id} (port {port})")
-        print(f"[AISBench] Log: {log_file}")
-
+        log_file = os.path.join(work_dir, 'ais_bench.log')
+        os.makedirs(work_dir, exist_ok=True)
+        
         with open(log_file, 'w') as log_f:
             result = subprocess.run(
                 cmd,
@@ -406,13 +457,8 @@ class ParallelEvaluator:
                 stderr=subprocess.STDOUT,
                 text=True
             )
-
-        if result.returncode == 0:
-            print(f"[AISBench] ✓ Instance {instance_id} completed")
-            return True
-        else:
-            print(f"[AISBench] ✗ Instance {instance_id} failed")
-            return False
+            
+        return result.returncode == 0
 
     def cleanup_custom_configs(self):
         """Clean up temporary dataset and model configs from ais_bench directory."""
@@ -421,7 +467,7 @@ class ParallelEvaluator:
             ais_bench_root = os.path.dirname(ais_bench.__file__)
 
             # Remove dataset config files (only for CEval mode)
-            if not self.custom_dataset_path:
+            if not self.custom_datasets:
                 ceval_config_dir = os.path.join(
                     ais_bench_root,
                     'benchmark/configs/datasets/ceval'
@@ -433,7 +479,6 @@ class ParallelEvaluator:
                     )
                     if os.path.exists(config_file):
                         os.remove(config_file)
-                        print(f"[Cleanup] Removed dataset config: {config_file}")
 
             # Remove model config files
             vllm_api_config_dir = os.path.join(
@@ -447,7 +492,6 @@ class ParallelEvaluator:
                 )
                 if os.path.exists(config_file):
                     os.remove(config_file)
-                    print(f"[Cleanup] Removed model config: {config_file}")
 
         except Exception as e:
             print(f"[Cleanup] Warning: Failed to remove temporary configs: {e}")
@@ -457,7 +501,6 @@ class ParallelEvaluator:
         print(f"\n[Cleanup] Shutting down {len(self.vllm_processes)} vLLM instances...")
         for i, process in enumerate(self.vllm_processes):
             if process.poll() is None:
-                print(f"[Cleanup] Stopping vLLM instance {i}")
                 process.terminate()
                 try:
                     process.wait(timeout=10)
@@ -466,64 +509,123 @@ class ParallelEvaluator:
 
     def aggregate_results(self) -> Dict:
         """
-        Aggregate results from all instances.
+        Aggregate results from all instances and calculate global accuracy.
         """
-        print(f"\n[Results] Aggregating results from {self.num_instances} instances...")
+        print(f"\n{'='*80}")
+        print("AGGREGATED RESULTS")
+        print(f"{'='*80}")
 
-        all_results = []
-        for i in range(self.num_instances):
-            result_dir = os.path.join(self.output_dir, f'instance_{i}')
+        final_summary = {}
 
-            # Find result files
-            for root, dirs, files in os.walk(result_dir):
-                for file in files:
-                    if 'summary' in file.lower() and file.endswith('.json'):
-                        result_path = os.path.join(root, file)
-                        try:
-                            with open(result_path, 'r') as f:
-                                data = json.load(f)
-                                all_results.append({
-                                    'instance_id': i,
-                                    'result_path': result_path,
-                                    'data': data
-                                })
-                                print(f"[Results] Instance {i}: Found result at {result_path}")
-                        except Exception as e:
-                            print(f"[Results] Warning: Failed to load {result_path}: {e}")
+        # List of datasets to aggregate
+        datasets_to_process = self.custom_datasets if self.custom_datasets else ['ceval']
 
-        if not all_results:
-            print("[Results] ⚠️  No results found")
-            return {}
+        for dataset_key in datasets_to_process:
+            dataset_name = Path(dataset_key).stem if self.custom_datasets else 'ceval'
+            print(f"\nDataset: {dataset_name}")
+            
+            total_correct = 0
+            total_samples = 0
+            instance_results = []
+            
+            for i in range(self.num_instances):
+                # Locate result file
+                if self.custom_datasets:
+                    result_dir = os.path.join(self.output_dir, dataset_name, f'instance_{i}')
+                else:
+                    result_dir = os.path.join(self.output_dir, 'ceval', f'instance_{i}')
+                
+                # Find summary json
+                summary_file = None
+                if os.path.exists(result_dir):
+                    for root, dirs, files in os.walk(result_dir):
+                        for file in files:
+                            if 'summary' in file.lower() and file.endswith('.json'):
+                                summary_file = os.path.join(root, file)
+                                break
+                
+                if summary_file:
+                    try:
+                        with open(summary_file, 'r') as f:
+                            data = json.load(f)
+                        
+                        # Try to extract accuracy/correct count
+                        # Logic: If we have correct_num, use it. 
+                        # If not, use accuracy * split_sample_count
+                        
+                        correct = 0
+                        count = 0
+                        
+                        # Strategy 1: Look for explicit counts (common in some evaluators)
+                        if 'correct_num' in data:
+                            correct = data['correct_num']
+                            count = data.get('total_num', 0)
+                        elif 'correct' in data:
+                            correct = data['correct']
+                            count = data.get('total', 0)
+                        
+                        # Strategy 2: Look for accuracy and use our tracked sample count
+                        elif 'accuracy' in data or 'acc' in data or 'score' in data:
+                            acc = data.get('accuracy', data.get('acc', data.get('score', 0)))
+                            # Normalize to 0-1
+                            if acc > 1.0: acc /= 100.0
+                                
+                            # Get tracked count
+                            if self.custom_datasets:
+                                count = self.split_counts.get(dataset_key, {}).get(i, 0)
+                            else:
+                                # For CEval, we don't strictly track count in this script version, 
+                                # but we can infer or just accept the partial result.
+                                # Fallback: assume equal weight if count missing? 
+                                # Better: try to find count in data
+                                count = data.get('num_samples', data.get('count', 0))
+                            
+                            correct = acc * count
+                        
+                        total_correct += correct
+                        total_samples += count
+                        
+                        instance_results.append({
+                            'instance': i,
+                            'correct': correct,
+                            'total': count,
+                            'raw_data': data
+                        })
+                        
+                    except Exception as e:
+                        print(f"  Instance {i}: Failed to parse result: {e}")
+                else:
+                    print(f"  Instance {i}: No result found")
 
-        print(f"[Results] ✓ Found {len(all_results)} result(s) from {self.num_instances} instances")
+            # Calculate Global Accuracy
+            if total_samples > 0:
+                global_acc = (total_correct / total_samples) * 100
+                print(f"  Total Samples: {total_samples}")
+                print(f"  Total Correct: {total_correct:.2f}")
+                print(f"  Global Accuracy: {global_acc:.2f}%")
+                
+                final_summary[dataset_name] = {
+                    'accuracy': global_acc,
+                    'total_samples': total_samples,
+                    'total_correct': total_correct
+                }
+            else:
+                print("  No valid samples found for aggregation.")
 
-        # Basic aggregation of accuracy
-        total_correct = 0
-        total_samples = 0
-        
-        for res in all_results:
-            # Try to find accuracy stats in the result JSON
-            # Structure depends on evaluator, but usually has 'correct' and 'total' or similar
-            data = res['data']
-            # This is a best-effort aggregation
-            pass
-
-        return {
-            'instances': len(all_results),
-            'results': [r['data'] for r in all_results],
-            'note': 'Each instance processed a different portion of the dataset'
-        }
+        return final_summary
 
     def run(self):
         """Main execution."""
         try:
             # Step 0: Prepare dataset splits (show info)
             print(f"\n{'='*80}")
-            print("STEP 0: Dataset splitting preparation")
+            print("STEP 0: Preparation")
             print(f"{'='*80}")
-            print(f"[Info] Dataset will be split across {self.num_instances} instances")
-            print(f"[Info] Each instance will process every {self.num_instances}th sample")
-            print(f"[Info] Each instance will use its own model config with unique port")
+            print(f"[Info] Instances: {self.num_instances}")
+            if self.custom_datasets:
+                print(f"[Info] Datasets: {len(self.custom_datasets)} files")
+                for ds in self.custom_datasets:
+                    print(f"  - {ds}")
 
             # Launch all vLLM instances
             print(f"\n{'='*80}")
@@ -554,14 +656,14 @@ class ParallelEvaluator:
 
             # Run ais_bench in parallel (each will split dataset inside)
             print(f"\n{'='*80}")
-            print("STEP 3: Running ais_bench in parallel (with dataset splitting)")
+            print("STEP 3: Running ais_bench in parallel")
             print(f"{'='*80}")
 
             with ThreadPoolExecutor(max_workers=self.num_instances) as executor:
                 futures = []
                 for i, rank in enumerate(self.ranks):
                     port = self.base_port + i
-                    future = executor.submit(self.run_ais_bench, i, port)
+                    future = executor.submit(self.run_worker, i, port)
                     futures.append(future)
 
                 # Wait for all to complete
@@ -574,14 +676,7 @@ class ParallelEvaluator:
             print("STEP 4: Aggregating results")
             print(f"{'='*80}")
 
-            final_result = self.aggregate_results()
-
-            # Print summary
-            print(f"\n{'='*80}")
-            print("FINAL RESULTS")
-            print(f"{'='*80}")
-            if final_result:
-                print(json.dumps(final_result, indent=2, ensure_ascii=False))
+            self.aggregate_results()
 
             print(f"\nAll results saved to: {self.output_dir}")
 

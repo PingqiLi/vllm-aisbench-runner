@@ -127,19 +127,19 @@ python parallel_eval.py \
   --quantization ascend  # 如果是W4A4权重
 ```
 
-#### 3.2 使用自定义采样数据集 (推荐)
+#### 3.2 使用自定义采样数据集
 
 结合 `tools/create_sampled_dataset.py` 生成的数据集使用：
 
 ```bash
-# 1. 生成采样数据集 (如 MCQ 类型)
+# 1. 生成采样数据集 (生成 datasets/custom_eval 目录)
 python tools/create_sampled_dataset.py --output datasets/custom_eval ...
 
-# 2. 并行评测
+# 2. 并行评测 (直接指定数据集目录)
 python parallel_eval.py \
   --rank 0,1,2,3 \
   --model-path /path/to/Qwen3-30B-A3B-Instruct \
-  --custom-dataset-path datasets/custom_eval_mcq.jsonl \
+  --custom-dataset-path datasets/custom_eval \
   --batch-size 16 \
   --quantization ascend
 ```
