@@ -462,15 +462,19 @@ class DatasetSampler:
                     f.write(json.dumps(item, ensure_ascii=False) + '\n')
             print(f"✓ MATH-QA dataset: {len(math_qa_data)} samples → {math_qa_file}")
 
-            # Copy meta template
-            import shutil
-            template_path = Path(__file__).parent / 'math_qa_meta_template.json'
-            if template_path.exists():
-                meta_dest = output_path / "math_qa.jsonl.meta.json"
-                shutil.copy2(template_path, meta_dest)
-                print(f"✓ Copied meta file: {meta_dest}")
-            else:
-                print(f"⚠ Warning: Meta template not found at {template_path}")
+            # Automatically generate .meta.json for MATH-QA
+            meta_file = output_path.parent / f"{output_path.name}_math_qa.jsonl.meta.json"
+            meta_content = {
+                "evaluator": "ais_bench.benchmark.datasets.math.MATHEvaluator",
+                "evaluator_kwargs": {
+                    "version": "v2"
+                },
+                "pred_postprocessor": "ais_bench.benchmark.datasets.math.math_postprocess_v2",
+                "template": "Question: {question}\nPlease reason step by step, and put your final answer within \\boxed{}.\nAnswer: {answer}"
+            }
+            with open(meta_file, 'w', encoding='utf-8') as f:
+                json.dump(meta_content, f, indent=4)
+            print(f"✓ MATH-QA meta:    Generated → {meta_file}")
 
             # Print MATH-QA statistics
             math_qa_counts = {}

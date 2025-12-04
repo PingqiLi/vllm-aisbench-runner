@@ -38,43 +38,39 @@ python3 tools/create_sampled_dataset.py \
   --seed 42
 ```
 
-**生成2个文件**：
+**生成文件说明**：
+每个命令会生成 2 个数据文件（共 4 个文件）以及对应的 meta 信息文件：
 ```
-datasets/custom_eval_mcq.jsonl       # CEval + MMLU + GPQA (选择题)
-datasets/custom_eval_math_qa.jsonl   # AIME + MATH (数学题)
+# 方案 A 生成:
+datasets/custom_eval_small_mcq.jsonl
+datasets/custom_eval_small_math_qa.jsonl
+datasets/custom_eval_small_math_qa.jsonl.meta.json  (自动生成)
+
+# 方案 B 生成:
+datasets/custom_eval_medium_mcq.jsonl
+datasets/custom_eval_medium_math_qa.jsonl
+datasets/custom_eval_medium_math_qa.jsonl.meta.json (自动生成)
 ```
 
-### 步骤2: 创建 meta.json
+### 步骤2: 运行评测
 
-⚠️ **MATH-QA 必须创建 meta.json，否则准确率会很低！**
-
-```bash
-# 复制模板到数据集目录
-cp tools/math_qa_meta_template.json ais_bench/datasets/custom_eval_math_qa.jsonl.meta.json
-```
-
-**meta.json 作用**：
-- 指定 `MATHEvaluator` 进行数学答案匹配
-- 指定 `math_postprocess_v2` 从模型输出中提取 `\boxed{}` 答案
-- 自定义 prompt 模板
-
-### 步骤3: 运行评测
+**注意**: MATH-QA 的 `.meta.json` 文件已由脚本自动生成，无需手动创建。
 
 ```bash
 # 1. MCQ (不需要meta.json)
 ais_bench \
   --models vllm_api_general_chat \
-  --custom-dataset-path ais_bench/datasets/custom_eval_mcq.jsonl \
+  --custom-dataset-path datasets/custom_eval_small_mcq.jsonl \
   --mode all \
-  --work-dir outputs/custom_eval_mcq
+  --work-dir outputs/custom_eval_small_mcq
 
-# 2. MATH-QA (必须指定meta.json)
+# 2. MATH-QA (自动使用生成的meta.json)
 ais_bench \
   --models vllm_api_general_chat \
-  --custom-dataset-path ais_bench/datasets/custom_eval_math_qa.jsonl \
-  --custom-dataset-meta-path ais_bench/datasets/custom_eval_math_qa.jsonl.meta.json \
+  --custom-dataset-path datasets/custom_eval_small_math_qa.jsonl \
+  --custom-dataset-meta-path datasets/custom_eval_small_math_qa.jsonl.meta.json \
   --mode all \
-  --work-dir outputs/custom_eval_math_qa
+  --work-dir outputs/custom_eval_small_math_qa
 ```
 
 ## 支持的数据集

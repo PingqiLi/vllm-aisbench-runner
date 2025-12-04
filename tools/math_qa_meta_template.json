@@ -1,8 +1,0 @@
-{
-  "evaluator": "ais_bench.benchmark.datasets.math.MATHEvaluator",
-  "evaluator_kwargs": {
-    "version": "v2"
-  },
-  "pred_postprocessor": "ais_bench.benchmark.datasets.math.math_postprocess_v2",
-  "template": "Question: {question}\nPlease reason step by step, and put your final answer within \\boxed{}.\nAnswer: {answer}"
-}
