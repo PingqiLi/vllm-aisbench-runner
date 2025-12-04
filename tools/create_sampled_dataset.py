@@ -57,8 +57,18 @@ class DatasetSampler:
             random.seed(seed)
 
         # Get ais_bench root directory
-        script_dir = Path(__file__).parent
-        self.ais_bench_root = script_dir.parent
+        # Priority:
+        # 1. AIS_BENCH_PATH environment variable
+        # 2. Parent of the script directory (fallback for when script is inside ais_bench)
+        env_path = os.environ.get('AIS_BENCH_PATH')
+        if env_path:
+            self.ais_bench_root = Path(env_path)
+            if not self.ais_bench_root.exists():
+                print(f"Warning: AIS_BENCH_PATH {env_path} does not exist")
+        else:
+            script_dir = Path(__file__).parent
+            self.ais_bench_root = script_dir.parent
+            print(f"Note: AIS_BENCH_PATH not set, using script parent: {self.ais_bench_root}")
 
     def load_jsonl(self, path: str) -> List[Dict[str, Any]]:
         """Load data from JSONL file."""
