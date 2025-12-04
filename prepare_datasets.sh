@@ -91,7 +91,7 @@ if [ -d "ceval" ]; then
     echo -e "${YELLOW}CEVAL already exists, skipping...${NC}"
 else
     echo "Downloading CEVAL from ModelScope..."
-    wget https://modelscope.cn/datasets/opencompass/ceval-exam/resolve/master/ceval-exam.zip
+    wget --no-check-certificate https://modelscope.cn/datasets/opencompass/ceval-exam/resolve/master/ceval-exam.zip
     unzip -q ceval-exam.zip
     rm ceval-exam.zip
 
@@ -111,7 +111,7 @@ if [ -d "mmlu" ]; then
     echo -e "${YELLOW}MMLU already exists, skipping...${NC}"
 else
     echo "Downloading MMLU..."
-    wget ${OPENCOMPASS_OSS}/mmlu.zip
+    wget --no-check-certificate ${OPENCOMPASS_OSS}/mmlu.zip
     unzip -q mmlu.zip
     rm mmlu.zip
     # mmlu.zip extracts to mmlu/ directory - correct structure
@@ -126,7 +126,7 @@ if [ -d "aime" ]; then
     echo -e "${YELLOW}AIME2024 already exists, skipping...${NC}"
 else
     echo "Downloading AIME2024..."
-    wget ${OPENCOMPASS_OSS}/aime.zip
+    wget --no-check-certificate ${OPENCOMPASS_OSS}/aime.zip
     unzip -q aime.zip
     rm aime.zip
     # aime.zip extracts to aime.jsonl file - need to create directory
@@ -143,7 +143,7 @@ if [ -d "gpqa" ]; then
     echo -e "${YELLOW}GPQA already exists, skipping...${NC}"
 else
     echo "Downloading GPQA..."
-    wget ${OPENCOMPASS_OSS}/gpqa.zip
+    wget --no-check-certificate ${OPENCOMPASS_OSS}/gpqa.zip
     unzip -q gpqa.zip
     rm gpqa.zip
     # gpqa.zip extracts to gpqa/ directory - correct structure
@@ -158,7 +158,7 @@ if [ -d "math" ]; then
     echo -e "${YELLOW}MATH500 already exists, skipping...${NC}"
 else
     echo "Downloading MATH500..."
-    wget ${OPENCOMPASS_OSS}/math.zip
+    wget --no-check-certificate ${OPENCOMPASS_OSS}/math.zip
     unzip -q math.zip
     rm math.zip
     # math.zip extracts to math/ directory - correct structure
