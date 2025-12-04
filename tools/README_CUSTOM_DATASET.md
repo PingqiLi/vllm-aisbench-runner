@@ -2,18 +2,39 @@
 
 ## 快速开始
 
-### 步骤1: 生成数据集
+### 步骤1: 设置环境与生成数据集
+
+首先需要设置 `AIS_BENCH_PATH` 环境变量指向 ais_bench 的安装/源码目录，以便脚本能找到原始数据集。
 
 ```bash
-cd /path/to/ais_bench
+export AIS_BENCH_PATH=/path/to/ais_bench
+```
 
+**方案 A: 快速验证 (小规模采样)**
+*AIME: 10, MATH500: 30, CEval: 30, GPQA: 20, MMLU: 30*
+
+```bash
 python3 tools/create_sampled_dataset.py \
-  --aime-count 30 \
-  --math-count 40 \
-  --ceval-count 50 \
-  --mmlu-count 50 \
-  --gpqa-count 30 \
-  --output datasets/custom_eval \
+  --aime-count 10 \
+  --math-count 30 \
+  --ceval-count 30 \
+  --mmlu-count 30 \
+  --gpqa-count 20 \
+  --output datasets/custom_eval_small \
+  --seed 42
+```
+
+**方案 B: 标准验证 (中等规模采样)**
+*AIME: 20, MATH500: 80, CEval: 80, GPQA: 80, MMLU: 40*
+
+```bash
+python3 tools/create_sampled_dataset.py \
+  --aime-count 20 \
+  --math-count 80 \
+  --ceval-count 80 \
+  --mmlu-count 40 \
+  --gpqa-count 80 \
+  --output datasets/custom_eval_medium \
   --seed 42
 ```
 
