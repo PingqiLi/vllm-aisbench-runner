@@ -30,8 +30,20 @@ def load_suite_config(suite_path: str) -> Dict[str, Any]:
     """
     suite_config = load_config_file(suite_path)
 
+    # Check if this is a single task config file
+    if 'task' in suite_config and 'tasks' not in suite_config and '_tasks' not in suite_config:
+        # It's a single task file, wrap it as a list
+        task_configs = [suite_config]
+        
+        # Ensure minimal suite keys exist for downstream compatibility
+        if 'suite' not in suite_config:
+            suite_config['suite'] = {
+                'name': suite_config['task'].get('name', 'single-task'),
+                'description': 'Single task execution'
+            }
+            
     # Check if tasks are already inlined (from config_snapshot.yaml)
-    if '_tasks' in suite_config:
+    elif '_tasks' in suite_config:
         # Tasks are already inlined, use them directly
         task_configs = suite_config['_tasks']
     else:
