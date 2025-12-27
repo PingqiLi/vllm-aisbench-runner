@@ -103,6 +103,20 @@ output:
 性能评测任务：
 - `synthetic-perf.yaml` - 合成数据性能测试 (mode=perf)
 
+**数据集特性说明：**
+
+| 数据集 | 任务类型 | Thinking 模式 | Sampling Params | Prompt 特征 |
+|--------|----------|---------------|-----------------|-------------|
+| ceval | 多选问答 | Think | temp=0.6, top_p=0.95, top_k=20 | "先一步步思考" |
+| mmlu | 多选问答 | Think | temp=0.6, top_p=0.95, top_k=20 | "Let's think step by step" |
+| aime2024 | 数学推理 | Think | temp=0.6, top_p=0.95, top_k=20 | "Please reason step by step" |
+| gpqa | 科学问答 | Think | temp=0.6, top_p=0.95, top_k=20 | "Think step by step before answering" |
+| math500 | 数学推理 | Think | temp=0.6, top_p=0.95, top_k=20 | "Please reason step by step" |
+| livecodebench | 代码生成 | Think | temp=0.6, top_p=0.95, top_k=20 | 代码推理任务 |
+| longbenchv2 | 长文本理解 | Think | temp=0.6, top_p=0.95, top_k=20 | 128k上下文长文本任务 |
+
+> **说明**: 根据 ais-bench 代码验证，所有数据集的 prompt 都包含 "step by step" 等推理指令，因此统一使用 **Think 模式** 参数。
+
 **配置格式：**
 ```yaml
 task:

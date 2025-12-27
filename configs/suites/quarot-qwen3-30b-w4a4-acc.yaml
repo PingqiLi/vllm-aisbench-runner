@@ -1,0 +1,28 @@
+# Accuracy Evaluation Suite for Qwen3-30B-A3B (QuaRot W4A4 quantization)
+# Comprehensive accuracy benchmarks with QuaRot 4-bit weight, 4-bit activation quantization
+# Sampling params follow best practices:
+#   - Thinking mode (aime2024, gpqa, math500, livecodebench): Temperature=0.6, TopP=0.95, TopK=20, MinP=0
+#   - Non-thinking mode (ceval, mmlu): Temperature=0.7, TopP=0.8, TopK=20, MinP=0
+
+suite:
+  name: "quarot-qwen3-30b-w4a4-acc"
+  description: "Full accuracy evaluation for Qwen3-30B-A3B (QuaRot W4A4)"
+  type: "accuracy"
+
+# Task configurations
+tasks:
+  - "configs/tasks/quarot-qwen3-30b-w4a4/ceval.yaml"
+  - "configs/tasks/quarot-qwen3-30b-w4a4/mmlu.yaml"
+  - "configs/tasks/quarot-qwen3-30b-w4a4/aime2024.yaml"
+  - "configs/tasks/quarot-qwen3-30b-w4a4/gpqa.yaml"
+  - "configs/tasks/quarot-qwen3-30b-w4a4/math500.yaml"
+  - "configs/tasks/quarot-qwen3-30b-w4a4/livecodebench.yaml"
+
+
+# Output configuration
+output:
+  work_dir: "outputs/quarot_qwen3_30b_w4a4_acc"
+
+# Runtime options
+runtime:
+  debug: false

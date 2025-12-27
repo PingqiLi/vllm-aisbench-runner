@@ -288,13 +288,18 @@ class BenchmarkRunner:
         # Extract parameters to patch
         batch_size = ais_config.get('batch_size')
         max_out_len = ais_config.get('max_out_len')
-        generation_kwargs = ais_config.get('generation_kwargs')
+        
+        # Get generation_kwargs from either 'sampling_params' (top-level) or 'aisbench.generation_kwargs'
+        generation_kwargs = task.get('sampling_params') or ais_config.get('generation_kwargs')
+        
         # Get port from vLLM config or args (ensure AISBench uses same port as vLLM)
         port = vllm_config.get('port') or getattr(self.args, 'port', None)
 
         # Always patch if port is specified, or if any other parameter is specified
         if port is not None or batch_size is not None or generation_kwargs is not None or max_out_len is not None:
             print(f"\n[Config Patcher] Patching AISBench model config...")
+            if generation_kwargs:
+                print(f"[Config Patcher] Using sampling_params: {generation_kwargs}")
             success = patch_vllm_api_config(
                 batch_size=batch_size,
                 generation_kwargs=generation_kwargs,

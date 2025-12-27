@@ -136,6 +136,57 @@ class VLLMManager:
         print(f"[vLLM] ✗ Timeout after {timeout}s")
         return False
 
+    def kill_existing(self):
+        """Ensure any previously tracked vLLM process is cleaned up."""
+        # First, clean up tracked process
+        if self.vllm_process and self.vllm_process.poll() is None:
+            try:
+                os.killpg(os.getpgid(self.vllm_process.pid), signal.SIGKILL)
+                self.vllm_process.wait(timeout=5)
+                print("[vLLM] Cleaned up previous process")
+            except Exception:
+                pass
+            finally:
+                if self._log_file_handle:
+                    self._log_file_handle.close()
+                    self._log_file_handle = None
+                self.vllm_process = None
+        
+        # Check if port is still in use (e.g., from previous crashed run)
+        import socket
+        port = self.args.port
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('', port))
+            sock.close()
+        except OSError:
+            print(f"[vLLM] ⚠ Warning: Port {port} is already in use!")
+            print(f"[vLLM] Please manually kill the process: kill $(lsof -ti :{port}) or fuser -k {port}/tcp")
+            sock.close()
+            return False
+        return True
+
+    def _wait_for_port_release(self, max_wait: int = 30):
+        """Wait for port to be released after shutdown."""
+        import socket
+        port = self.args.port
+        
+        for i in range(max_wait):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(('', port))
+                sock.close()
+                if i > 0:
+                    print(f"[vLLM] Port {port} released after {i}s")
+                return True
+            except OSError:
+                sock.close()
+                if i == 0:
+                    print(f"[vLLM] Waiting for port {port} to be released...")
+                time.sleep(1)
+        
+        print(f"[vLLM] Warning: Port {port} still in use after {max_wait}s")
+        return False
 
     def _get_log_file_path(self, dataset_name: Optional[str] = None) -> str:
         """
@@ -188,6 +239,9 @@ class VLLMManager:
         Returns:
             True if launch successful, False otherwise
         """
+        if not self.kill_existing():
+            return False
+
         cmd = self.build_command()
         log_file_path = self._get_log_file_path(dataset_name)
 
@@ -238,14 +292,26 @@ class VLLMManager:
                     self.vllm_process.wait(timeout=10)
                     print("[vLLM] ✓ Shutdown complete")
                 except subprocess.TimeoutExpired:
+                    print("[vLLM] Graceful shutdown timeout, force killing...")
                     os.killpg(os.getpgid(self.vllm_process.pid), signal.SIGKILL)
                     self.vllm_process.wait()
                     print("[vLLM] ✓ Terminated")
             except Exception as e:
                 print(f"[vLLM] Warning: Cleanup error: {e}")
+                # Last resort: try to kill directly
+                try:
+                    self.vllm_process.kill()
+                    self.vllm_process.wait(timeout=5)
+                except Exception:
+                    pass
             finally:
                 # Close log file handle
                 if self._log_file_handle:
                     self._log_file_handle.close()
                     self._log_file_handle = None
                 self.vllm_process = None
+            
+            # Wait for port to be fully released (critical for next task)
+            if not self._wait_for_port_release(max_wait=60):
+                print("[vLLM] ⚠ Port may still be in use, next task might fail")
+
