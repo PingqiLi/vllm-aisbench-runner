@@ -75,7 +75,8 @@ def restore_config(config_path: str, backup_path: str):
 def patch_vllm_api_config(
     batch_size: Optional[int] = None,
     generation_kwargs: Optional[Dict[str, Any]] = None,
-    max_out_len: Optional[int] = None
+    max_out_len: Optional[int] = None,
+    port: Optional[int] = None
 ) -> bool:
     """
     Patch vllm_api_general_chat.py with task-specific configurations.
@@ -84,6 +85,7 @@ def patch_vllm_api_config(
         batch_size: Batch size for inference
         generation_kwargs: Generation parameters (temperature, top_k, etc.)
         max_out_len: Maximum output length
+        port: vLLM service port (syncs host_port in AISBench config)
 
     Returns:
         True if successful, False otherwise
@@ -99,6 +101,15 @@ def patch_vllm_api_config(
         # Read current config
         with open(config_path, 'r', encoding='utf-8') as f:
             content = f.read()
+
+        # Patch port (host_port in vllm_api_general_chat.py)
+        if port is not None:
+            content = re.sub(
+                r'host_port\s*=\s*\d+',
+                f'host_port={port}',
+                content
+            )
+            print(f"[Config Patcher] Set host_port={port}")
 
         # Patch batch_size
         if batch_size is not None:

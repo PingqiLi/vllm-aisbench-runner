@@ -39,8 +39,6 @@ class BenchmarkRunner:
         self.vllm_manager = None
 
 
-
-
     def build_aisbench_command(self) -> list:
         """Build the ais_bench command with all specified parameters."""
         cmd = ["ais_bench"]
@@ -285,19 +283,23 @@ class BenchmarkRunner:
             task: Task configuration dictionary
         """
         ais_config = task.get('aisbench', {})
+        vllm_config = task.get('vllm', {})
 
         # Extract parameters to patch
         batch_size = ais_config.get('batch_size')
         max_out_len = ais_config.get('max_out_len')
         generation_kwargs = ais_config.get('generation_kwargs')
+        # Get port from vLLM config or args (ensure AISBench uses same port as vLLM)
+        port = vllm_config.get('port') or getattr(self.args, 'port', None)
 
-        # Only patch if at least one parameter is specified
-        if batch_size is not None or generation_kwargs is not None or max_out_len is not None:
+        # Always patch if port is specified, or if any other parameter is specified
+        if port is not None or batch_size is not None or generation_kwargs is not None or max_out_len is not None:
             print(f"\n[Config Patcher] Patching AISBench model config...")
             success = patch_vllm_api_config(
                 batch_size=batch_size,
                 generation_kwargs=generation_kwargs,
-                max_out_len=max_out_len
+                max_out_len=max_out_len,
+                port=port
             )
             if not success:
                 print("[Config Patcher] Warning: Failed to patch config, using defaults")

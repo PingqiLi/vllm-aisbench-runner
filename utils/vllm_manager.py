@@ -136,19 +136,6 @@ class VLLMManager:
         print(f"[vLLM] ✗ Timeout after {timeout}s")
         return False
 
-    def kill_existing(self):
-        """Kill any existing vLLM processes."""
-        try:
-            result = subprocess.run(
-                ["pkill", "-f", "vllm"],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                print("[vLLM] Killed existing processes")
-                time.sleep(2)
-        except Exception:
-            pass  # Silently ignore if no processes found
 
     def _get_log_file_path(self, dataset_name: Optional[str] = None) -> str:
         """
@@ -201,8 +188,6 @@ class VLLMManager:
         Returns:
             True if launch successful, False otherwise
         """
-        self.kill_existing()
-
         cmd = self.build_command()
         log_file_path = self._get_log_file_path(dataset_name)
 
