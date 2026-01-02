@@ -11,7 +11,7 @@ vllm:
   model_path: "Qwen/Qwen3-30B-A3B"
   host: "localhost"
   port: 8000
-  tensor_parallel_size: 8
+  tensor_parallel_size: 1
   quantization: "ascend"
   max_model_len: 32768
   timeout: 600
@@ -21,7 +21,16 @@ aisbench:
   dataset: "aime2024_gen_0_shot_chat_prompt"
   model: "vllm_api_general_chat"
   mode: "all"
+  batch_size: 16
   max_out_len: 32000
   max_num_workers: 16
   merge_ds: true
   dump_eval_details: true
+
+sampling_params:
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  min_p: 0
+  seed: 42
+  repetition_penalty: 1.0
