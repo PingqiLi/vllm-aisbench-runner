@@ -85,7 +85,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 1/7: CEVAL"
+echo "Dataset 1/8: CEVAL"
 echo "======================================"
 if [ -d "ceval" ]; then
     echo -e "${YELLOW}CEVAL already exists, skipping...${NC}"
@@ -105,7 +105,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 2/7: MMLU"
+echo "Dataset 2/8: MMLU"
 echo "======================================"
 if [ -d "mmlu" ]; then
     echo -e "${YELLOW}MMLU already exists, skipping...${NC}"
@@ -120,7 +120,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 3/7: AIME2024"
+echo "Dataset 3/8: AIME2024"
 echo "======================================"
 if [ -d "aime" ]; then
     echo -e "${YELLOW}AIME2024 already exists, skipping...${NC}"
@@ -137,7 +137,26 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 4/7: GPQA"
+echo "Dataset 4/8: AIME2025"
+echo "======================================"
+if [ -d "aime2025" ]; then
+    echo -e "${YELLOW}AIME2025 already exists, skipping...${NC}"
+else
+    echo "Downloading AIME2025..."
+    wget --no-check-certificate ${OPENCOMPASS_OSS}/aime2025.zip
+    unzip -q aime2025.zip
+    rm aime2025.zip
+    mkdir -p aime2025
+    # Move extracted data into aime2025/ if not already there
+    if [ -f "aime2025.jsonl" ]; then
+        mv aime2025.jsonl aime2025/
+    fi
+    echo -e "${GREEN}AIME2025 downloaded successfully${NC}"
+fi
+
+echo ""
+echo "======================================"
+echo "Dataset 5/8: GPQA"
 echo "======================================"
 if [ -d "gpqa" ]; then
     echo -e "${YELLOW}GPQA already exists, skipping...${NC}"
@@ -152,7 +171,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 5/7: MATH500"
+echo "Dataset 6/8: MATH500"
 echo "======================================"
 if [ -d "math" ]; then
     echo -e "${YELLOW}MATH500 already exists, skipping...${NC}"
@@ -177,7 +196,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 6/7: LiveCodeBench"
+echo "Dataset 7/8: LiveCodeBench"
 echo "======================================"
 if [ -d "code_generation_lite" ]; then
     echo -e "${YELLOW}LiveCodeBench already exists, skipping...${NC}"
@@ -200,7 +219,7 @@ fi
 
 echo ""
 echo "======================================"
-echo "Dataset 7/7: LongBenchV2"
+echo "Dataset 8/8: LongBenchV2"
 echo "======================================"
 if [ -d "LongBench-v2" ]; then
     echo -e "${YELLOW}LongBenchV2 already exists, skipping...${NC}"
@@ -230,14 +249,15 @@ echo "Dataset locations:"
 echo "  1. CEVAL:         $DATASETS_DIR/ceval/formal_ceval/{dev,val,test}/"
 echo "  2. MMLU:          $DATASETS_DIR/mmlu/{dev,val,test}/"
 echo "  3. AIME2024:      $DATASETS_DIR/aime/aime.jsonl"
-echo "  4. GPQA:          $DATASETS_DIR/gpqa/*.csv"
-echo "  5. MATH500:       $DATASETS_DIR/math/math.json"
+echo "  4. AIME2025:      $DATASETS_DIR/aime2025/"
+echo "  5. GPQA:          $DATASETS_DIR/gpqa/*.csv"
+echo "  6. MATH500:       $DATASETS_DIR/math/math.json"
 if [ "$HF_CLI_AVAILABLE" = true ]; then
-    echo "  6. LiveCodeBench: $DATASETS_DIR/code_generation_lite/"
-    echo "  7. LongBenchV2:   $DATASETS_DIR/LongBench-v2/"
+    echo "  7. LiveCodeBench: $DATASETS_DIR/code_generation_lite/"
+    echo "  8. LongBenchV2:   $DATASETS_DIR/LongBench-v2/"
 else
-    echo "  6. LiveCodeBench: (skipped - install huggingface-cli to enable)"
-    echo "  7. LongBenchV2:   (skipped - install huggingface-cli to enable)"
+    echo "  7. LiveCodeBench: (skipped - install huggingface-cli to enable)"
+    echo "  8. LongBenchV2:   (skipped - install huggingface-cli to enable)"
 fi
 echo ""
 echo "Next steps:"

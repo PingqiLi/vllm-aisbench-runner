@@ -1,0 +1,15 @@
+suite:
+  name: "qwen3-32b-bf16-acc"
+  description: "Accuracy evaluation for Qwen3-32B (BF16) - AIME2025, LiveCodeBench, GPQA"
+  type: "accuracy"
+
+tasks:
+  - "configs/tasks/qwen3-32b-bf16/aime2025.yaml"
+  - "configs/tasks/qwen3-32b-bf16/livecodebench.yaml"
+  - "configs/tasks/qwen3-32b-bf16/gpqa.yaml"
+
+output:
+  work_dir: "outputs/qwen3_32b_bf16_acc"
+
+runtime:
+  debug: false
