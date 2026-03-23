@@ -76,29 +76,48 @@ def patch_vllm_api_config(
     batch_size: Optional[int] = None,
     generation_kwargs: Optional[Dict[str, Any]] = None,
     max_out_len: Optional[int] = None,
-    port: Optional[int] = None
-) -> bool:
+    port: Optional[int] = None,
+    instance_suffix: Optional[str] = None
+) -> Optional[str]:
     """
     Patch vllm_api_general_chat.py with task-specific configurations.
+    
+    If instance_suffix is provided, creates an instance-specific config file
+    instead of modifying the global config. This enables concurrent benchmark runs.
 
     Args:
         batch_size: Batch size for inference
         generation_kwargs: Generation parameters (temperature, top_k, etc.)
         max_out_len: Maximum output length
         port: vLLM service port (syncs host_port in AISBench config)
+        instance_suffix: Optional suffix for creating instance-specific config
+                        (e.g., "port8040" creates vllm_api_general_chat_port8040.py)
 
     Returns:
-        True if successful, False otherwise
+        Config name to use with ais_bench (e.g., "vllm_api_general_chat" or 
+        "vllm_api_general_chat_port8040"), or None if failed
     """
     config_path = find_ais_bench_config_path()
     if not config_path:
-        return False
+        return None
 
-    # Create backup
-    backup_path = backup_config(config_path)
+    # Determine target config path
+    backup_path = None
+    if instance_suffix:
+        # Create instance-specific config file
+        base_name = os.path.splitext(config_path)[0]  # Remove .py
+        target_config_path = f"{base_name}_{instance_suffix}.py"
+        config_name = f"vllm_api_general_chat_{instance_suffix}"
+        print(f"[Config Patcher] Creating instance-specific config: {config_name}")
+    else:
+        # Modify global config (original behavior)
+        target_config_path = config_path
+        config_name = "vllm_api_general_chat"
+        # Create backup only for global config
+        backup_path = backup_config(config_path)
 
     try:
-        # Read current config
+        # Read original config content
         with open(config_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -150,18 +169,34 @@ def patch_vllm_api_config(
             print(f"[Config Patcher] Updated generation_kwargs: {generation_kwargs}")
 
         # Write patched config
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(target_config_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-        print(f"[Config Patcher] Successfully patched: {config_path}")
-        return True
+        print(f"[Config Patcher] Successfully patched: {target_config_path}")
+        return config_name
 
     except Exception as e:
         print(f"[Config Patcher] Error patching config: {e}")
-        # Restore from backup on error
-        if os.path.exists(backup_path):
+        # Restore from backup on error (only for global config)
+        if not instance_suffix and backup_path and os.path.exists(backup_path):
             restore_config(config_path, backup_path)
-        return False
+        return None
+
+
+def cleanup_instance_config(instance_suffix: str):
+    """
+    Remove an instance-specific config file.
+    
+    Args:
+        instance_suffix: The suffix used when creating the config
+    """
+    config_path = find_ais_bench_config_path()
+    if config_path:
+        base_name = os.path.splitext(config_path)[0]
+        instance_config_path = f"{base_name}_{instance_suffix}.py"
+        if os.path.exists(instance_config_path):
+            os.remove(instance_config_path)
+            print(f"[Config Patcher] Cleaned up instance config: {instance_config_path}")
 
 
 def cleanup_backup():

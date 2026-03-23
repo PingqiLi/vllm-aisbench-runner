@@ -22,7 +22,7 @@ from utils import (
     VLLMManager, save_config_snapshot, save_dataset_config,
     create_experiment_dir, rename_output_folder
 )
-from utils.ais_config_patcher import patch_vllm_api_config
+from utils.ais_config_patcher import patch_vllm_api_config, cleanup_instance_config
 from utils.statistics import analyze_repeated_runs
 
 
@@ -48,6 +48,9 @@ class BenchmarkRunner:
             # Use custom config file (path without .py extension)
             config_path_no_ext = self.custom_model_config_path.replace('.py', '')
             cmd.extend(["--models", config_path_no_ext])
+        elif hasattr(self, 'current_ais_config_name') and self.current_ais_config_name:
+            # Use instance-specific config name (e.g., vllm_api_general_chat_port8040)
+            cmd.extend(["--models", self.current_ais_config_name])
         elif self.args.ais_model:
             cmd.extend(["--models", self.args.ais_model])
         else:
@@ -213,6 +216,11 @@ class BenchmarkRunner:
                 failed_tasks.append(task_name)
             finally:
                 self.vllm_manager.shutdown()
+                # Clean up instance-specific config file if created
+                if hasattr(self, 'current_instance_suffix') and self.current_instance_suffix:
+                    cleanup_instance_config(self.current_instance_suffix)
+                    self.current_instance_suffix = None
+                    self.current_ais_config_name = None
 
         self.end_time = datetime.now()
         duration = (self.end_time - self.start_time).total_seconds()
@@ -278,6 +286,8 @@ class BenchmarkRunner:
     def _patch_ais_config(self, task: Dict[str, Any]):
         """
         Patch AISBench vllm_api_general_chat.py with task-specific parameters.
+        Creates instance-specific config file when port is specified to enable
+        concurrent benchmark runs.
 
         Args:
             task: Task configuration dictionary
@@ -300,14 +310,28 @@ class BenchmarkRunner:
             print(f"\n[Config Patcher] Patching AISBench model config...")
             if generation_kwargs:
                 print(f"[Config Patcher] Using sampling_params: {generation_kwargs}")
-            success = patch_vllm_api_config(
+            
+            # Generate instance suffix based on port to enable concurrent runs
+            instance_suffix = f"port{port}" if port else None
+            
+            config_name = patch_vllm_api_config(
                 batch_size=batch_size,
                 generation_kwargs=generation_kwargs,
                 max_out_len=max_out_len,
-                port=port
+                port=port,
+                instance_suffix=instance_suffix
             )
-            if not success:
+            
+            if config_name:
+                # Store the config name for use in ais_bench command
+                self.current_ais_config_name = config_name
+                # Store instance suffix for cleanup
+                if instance_suffix:
+                    self.current_instance_suffix = instance_suffix
+            else:
                 print("[Config Patcher] Warning: Failed to patch config, using defaults")
+                self.current_ais_config_name = None
+                self.current_instance_suffix = None
 
     def _analyze_repeated_runs(self, tasks: list):
         """
