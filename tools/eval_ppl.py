@@ -98,7 +98,7 @@ def load_eval_text(eval_data_path=None):
 
 
 def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
-                     quantization=None, enforce_eager=False, gpu_memory_utilization=0.85,
+                     quantization=None, gpu_memory_utilization=0.85,
                      trust_remote_code=False):
     """Compute perplexity using vLLM offline LLM with prompt_logprobs.
 
@@ -112,7 +112,7 @@ def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
     print(f"Loading model: {model_path}")
     print(f"  tensor_parallel_size={tensor_parallel_size}")
     print(f"  quantization={quantization}")
-    print(f"  enforce_eager={enforce_eager}")
+    print(f"  enforce_eager=True")
     print(f"  max_model_len={max_length}")
 
     llm_kwargs = dict(
@@ -122,11 +122,10 @@ def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
         max_num_seqs=1,
         gpu_memory_utilization=gpu_memory_utilization,
         trust_remote_code=trust_remote_code,
+        enforce_eager=True,  # always eager for PPL eval (stable on NPU, no perf need)
     )
     if quantization:
         llm_kwargs["quantization"] = quantization
-    if enforce_eager:
-        llm_kwargs["enforce_eager"] = True
 
     llm = LLM(**llm_kwargs)
 
@@ -254,8 +253,6 @@ def parse_args():
                         help="Tensor parallel size (default: 1)")
     parser.add_argument("--quantization", type=str, default=None,
                         help="Quantization method (e.g., 'ascend' for ResQ/W4A4/W8A8)")
-    parser.add_argument("--enforce-eager", action="store_true",
-                        help="Enforce eager mode (recommended for quantized models)")
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.85,
                         help="GPU memory utilization (default: 0.85)")
     parser.add_argument("--max-length", type=int, default=1024,
@@ -345,7 +342,6 @@ def main():
         max_length=args.max_length,
         tensor_parallel_size=args.tensor_parallel_size,
         quantization=args.quantization,
-        enforce_eager=args.enforce_eager,
         gpu_memory_utilization=args.gpu_memory_utilization,
         trust_remote_code=args.trust_remote_code,
     )
