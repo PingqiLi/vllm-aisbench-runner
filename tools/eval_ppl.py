@@ -118,7 +118,7 @@ def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
     llm_kwargs = dict(
         model=model_path,
         tensor_parallel_size=tensor_parallel_size,
-        max_model_len=max_length,
+        max_model_len=max_length + 1,  # +1 for the generated token (max_tokens=1)
         max_num_seqs=1,
         gpu_memory_utilization=gpu_memory_utilization,
         trust_remote_code=trust_remote_code,
