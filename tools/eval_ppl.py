@@ -48,12 +48,48 @@ from typing import Optional
 import torch
 
 
-def get_wikitext2_test():
-    """Load wikitext-2-test split, auto-downloading via HuggingFace datasets."""
+def load_eval_text(eval_data_path=None):
+    """Load evaluation text.
+
+    Args:
+        eval_data_path: Path to local data file. Supports:
+            - .parquet (HuggingFace parquet export, expects 'text' column)
+            - .jsonl (one JSON object per line, expects 'text' key)
+            - .txt (plain text, used as-is)
+            If None, auto-downloads wikitext-2-test via HuggingFace datasets.
+
+    Returns:
+        Concatenated text string.
+    """
+    if eval_data_path is not None:
+        print(f"Loading eval data from: {eval_data_path}")
+        path = eval_data_path
+
+        if path.endswith(".parquet"):
+            import pandas as pd
+            df = pd.read_parquet(path)
+            return "\n\n".join(df["text"].tolist())
+
+        elif path.endswith(".jsonl"):
+            import json
+            texts = []
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    obj = json.loads(line)
+                    texts.append(obj.get("text", ""))
+            return "\n\n".join(texts)
+
+        else:
+            # Plain text
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+
+    # Auto-download
     try:
         from datasets import load_dataset
     except ImportError:
         print("ERROR: 'datasets' library required. Install with: pip install datasets")
+        print("Or provide --eval-data-path with a local file (.parquet / .jsonl / .txt)")
         sys.exit(1)
 
     print("Loading wikitext-2-raw-v1 test split...")
@@ -224,6 +260,11 @@ def parse_args():
     parser.add_argument("--trust-remote-code", action="store_true",
                         help="Trust remote code for model loading")
 
+    # Dataset
+    parser.add_argument("--eval-data-path", type=str, default=None,
+                        help="Path to local eval data file (.parquet / .jsonl / .txt). "
+                             "If not set, auto-downloads wikitext-2-test via HuggingFace.")
+
     # Baseline comparison
     parser.add_argument("--baseline-model-path", type=str, default=None,
                         help="Path to baseline (bf16) model for comparison. "
@@ -243,8 +284,8 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Load wikitext-2-test
-    text = get_wikitext2_test()
+    # Load evaluation text
+    text = load_eval_text(args.eval_data_path)
 
     # Evaluate baseline if requested
     baseline_ppl = args.baseline_ppl
