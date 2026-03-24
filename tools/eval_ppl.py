@@ -253,8 +253,9 @@ def parse_args():
                         help="Tensor parallel size (default: 1)")
     parser.add_argument("--quantization", type=str, default=None,
                         help="Quantization method (e.g., 'ascend' for ResQ/W4A4/W8A8)")
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.85,
-                        help="GPU memory utilization (default: 0.85)")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.7,
+                        help="GPU memory utilization (default: 0.7). "
+                             "PPL eval only needs 1 sequence, no need for large KV cache.")
     parser.add_argument("--max-length", type=int, default=1024,
                         help="Max sequence length per chunk (default: 1024)")
     parser.add_argument("--trust-remote-code", action="store_true",
