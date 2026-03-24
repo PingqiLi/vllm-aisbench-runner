@@ -359,7 +359,23 @@ def main():
         sys.exit(1)
     text = load_eval_text(args.eval_data_path)
 
-    # Evaluate baseline if requested
+    # Evaluate target model FIRST (vLLM must run before transformers
+    # initializes NPU, otherwise forked subprocess cannot re-init NPU)
+    print("\n" + "=" * 60)
+    print("Evaluating target model (via vLLM)...")
+    print("=" * 60)
+    model_ppl, model_tokens, model_time = compute_ppl_vllm(
+        model_path=args.model_path,
+        text=text,
+        max_length=args.max_length,
+        tensor_parallel_size=args.tensor_parallel_size,
+        quantization=args.quantization,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        trust_remote_code=args.trust_remote_code,
+    )
+
+    # Evaluate baseline AFTER vLLM (transformers uses device_map="auto",
+    # no fork issues since NPU init in main process is fine)
     baseline_ppl = args.baseline_ppl
     baseline_info = None
 
@@ -391,20 +407,6 @@ def main():
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
             save_cached_ppl(args.cache_dir, cache_key, baseline_info)
-
-    # Evaluate target model
-    print("\n" + "=" * 60)
-    print("Evaluating target model...")
-    print("=" * 60)
-    model_ppl, model_tokens, model_time = compute_ppl_vllm(
-        model_path=args.model_path,
-        text=text,
-        max_length=args.max_length,
-        tensor_parallel_size=args.tensor_parallel_size,
-        quantization=args.quantization,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        trust_remote_code=args.trust_remote_code,
-    )
 
     # Print comparison
     print_comparison(model_ppl, baseline_ppl, args.model_path, args.baseline_model_path)
