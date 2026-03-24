@@ -261,9 +261,11 @@ def parse_args():
                         help="Trust remote code for model loading")
 
     # Dataset
-    parser.add_argument("--eval-data-path", type=str, default=None,
+    default_data = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "datasets", "wikitext2_test.parquet")
+    parser.add_argument("--eval-data-path", type=str, default=default_data,
                         help="Path to local eval data file (.parquet / .jsonl / .txt). "
-                             "If not set, auto-downloads wikitext-2-test via HuggingFace.")
+                             "Default: datasets/wikitext2_test.parquet")
 
     # Baseline comparison
     parser.add_argument("--baseline-model-path", type=str, default=None,
@@ -285,6 +287,10 @@ def main():
     args = parse_args()
 
     # Load evaluation text
+    if not os.path.exists(args.eval_data_path):
+        print(f"ERROR: eval data not found: {args.eval_data_path}")
+        print("The default dataset (datasets/wikitext2_test.parquet) should be in the repo.")
+        sys.exit(1)
     text = load_eval_text(args.eval_data_path)
 
     # Evaluate baseline if requested
