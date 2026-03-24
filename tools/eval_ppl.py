@@ -98,7 +98,7 @@ def load_eval_text(eval_data_path=None):
 
 
 def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
-                     quantization=None, gpu_memory_utilization=0.85,
+                     quantization=None, gpu_memory_utilization=0.7,
                      trust_remote_code=False):
     """Compute perplexity using vLLM offline LLM with prompt_logprobs.
 
@@ -179,6 +179,68 @@ def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
 
     ppl = math.exp(nll_sum / n_tokens)
     print(f"PPL = {ppl:.4f} (over {n_tokens} tokens)")
+    return ppl, n_tokens, elapsed
+
+
+@torch.no_grad()
+def compute_ppl_hf(model_path, text, max_length=1024, trust_remote_code=False):
+    """Compute perplexity using HuggingFace transformers (for bf16 baseline).
+
+    Uses device_map="auto" to spread model across available devices.
+    No vLLM dependency — works reliably for unquantized models.
+    """
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
+    print(f"Loading model with transformers: {model_path}")
+    print(f"  device_map=auto, torch_dtype=auto")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        device_map="auto",
+        torch_dtype="auto",
+        trust_remote_code=trust_remote_code,
+    )
+    model.eval()
+
+    tokens = tokenizer.encode(text)
+    n_total = len(tokens)
+    print(f"Total tokens: {n_total}")
+
+    stride = max_length
+    chunks = []
+    for begin in range(0, n_total, stride):
+        end = min(begin + max_length, n_total)
+        chunks.append(tokens[begin:end])
+    print(f"Split into {len(chunks)} chunks (max_length={max_length})")
+
+    from tqdm import tqdm
+    nll_sum = 0.0
+    n_tokens = 0
+
+    print("Running inference...")
+    t0 = time.time()
+    for chunk in tqdm(chunks, desc="Evaluating PPL"):
+        input_ids = torch.tensor([chunk], device=model.device)
+        outputs = model(input_ids, labels=input_ids)
+        # outputs.loss is mean cross-entropy over (seq_len - 1) tokens
+        num_loss_tokens = len(chunk) - 1
+        nll_sum += outputs.loss.float().cpu().item() * num_loss_tokens
+        n_tokens += num_loss_tokens
+
+    elapsed = time.time() - t0
+    ppl = math.exp(nll_sum / n_tokens)
+    print(f"PPL = {ppl:.4f} (over {n_tokens} tokens, {elapsed:.1f}s)")
+
+    # Free memory
+    del model
+    import gc
+    gc.collect()
+    try:
+        torch.npu.empty_cache()
+    except Exception:
+        pass
+
     return ppl, n_tokens, elapsed
 
 
@@ -311,15 +373,12 @@ def main():
             baseline_info = cached
         else:
             print("\n" + "=" * 60)
-            print("Evaluating baseline model...")
+            print("Evaluating baseline model (via transformers)...")
             print("=" * 60)
-            baseline_tp = args.baseline_tensor_parallel_size
-            baseline_ppl, baseline_tokens, baseline_time = compute_ppl_vllm(
+            baseline_ppl, baseline_tokens, baseline_time = compute_ppl_hf(
                 model_path=args.baseline_model_path,
                 text=text,
                 max_length=args.max_length,
-                tensor_parallel_size=baseline_tp,
-                gpu_memory_utilization=args.gpu_memory_utilization,
                 trust_remote_code=args.trust_remote_code,
             )
             baseline_info = {
