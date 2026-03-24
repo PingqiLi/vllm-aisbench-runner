@@ -271,9 +271,8 @@ def parse_args():
     parser.add_argument("--baseline-model-path", type=str, default=None,
                         help="Path to baseline (bf16) model for comparison. "
                              "Result is cached for future runs.")
-    parser.add_argument("--baseline-tensor-parallel-size", type=int, default=None,
-                        help="Tensor parallel size for baseline model. "
-                             "Default: same as --tensor-parallel-size. "
+    parser.add_argument("--baseline-tensor-parallel-size", type=int, default=2,
+                        help="Tensor parallel size for baseline model (default: 2). "
                              "BF16 32B models typically need TP>=2 to avoid OOM.")
     parser.add_argument("--baseline-ppl", type=float, default=None,
                         help="Pre-computed baseline PPL (skip baseline evaluation)")
@@ -313,7 +312,7 @@ def main():
             print("\n" + "=" * 60)
             print("Evaluating baseline model...")
             print("=" * 60)
-            baseline_tp = args.baseline_tensor_parallel_size or args.tensor_parallel_size
+            baseline_tp = args.baseline_tensor_parallel_size
             baseline_ppl, baseline_tokens, baseline_time = compute_ppl_vllm(
                 model_path=args.baseline_model_path,
                 text=text,
