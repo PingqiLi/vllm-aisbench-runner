@@ -97,8 +97,8 @@ def load_eval_text(eval_data_path=None):
     return "\n\n".join(ds["text"])
 
 
-def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
-                     quantization=None, gpu_memory_utilization=0.7,
+def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=2,
+                     quantization=None, gpu_memory_utilization=0.85,
                      trust_remote_code=False):
     """Compute perplexity using vLLM offline LLM with prompt_logprobs.
 
@@ -311,13 +311,12 @@ def parse_args():
     # Model configuration
     parser.add_argument("--model-path", type=str, required=True,
                         help="Path to the model to evaluate")
-    parser.add_argument("--tensor-parallel-size", type=int, default=1,
-                        help="Tensor parallel size (default: 1)")
+    parser.add_argument("--tensor-parallel-size", type=int, default=2,
+                        help="Tensor parallel size (default: 2)")
     parser.add_argument("--quantization", type=str, default=None,
                         help="Quantization method (e.g., 'ascend' for ResQ/W4A4/W8A8)")
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.7,
-                        help="GPU memory utilization (default: 0.7). "
-                             "PPL eval only needs 1 sequence, no need for large KV cache.")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.85,
+                        help="GPU memory utilization (default: 0.85)")
     parser.add_argument("--max-length", type=int, default=1024,
                         help="Max sequence length per chunk (default: 1024)")
     parser.add_argument("--trust-remote-code", action="store_true",
