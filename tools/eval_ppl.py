@@ -150,10 +150,13 @@ def compute_ppl_vllm(model_path, text, max_length=1024, tensor_parallel_size=1,
         prompt_logprobs=0,
     )
 
+    # Convert token lists to TokensPrompt dicts
+    prompts = [{"prompt_token_ids": chunk} for chunk in chunks]
+
     print("Running inference...")
     t0 = time.time()
     outputs = llm.generate(
-        prompt_token_ids=chunks,
+        prompts=prompts,
         sampling_params=sampling_params,
         use_tqdm=True,
     )
