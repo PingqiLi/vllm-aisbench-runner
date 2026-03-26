@@ -2,201 +2,301 @@
 
 一体化 vLLM + AISBench 评测工具，基于 task-based 架构实现自动化评测流程。
 
-## 1. 环境准备
+## 1. 功能
 
-### 1.1 安装依赖
+- **精度评测**：通过 AISBench 运行 CEval、MMLU、AIME2024、GPQA、MATH500、LiveCodeBench、LongBenchV2 等数据集
+- **性能评测**：合成数据集吞吐/延迟测试
+- **PPL 评测**：基于 wikitext-2 的 Perplexity 评估，支持量化模型与 BF16 基线对比
+- **重复实验**：suite 配置 `repeat: N` 支持同一任务多次运行，用于可靠性测试
+- **自动化流程**：自动启停 vLLM 服务、注入 AISBench 配置、保存实验快照
 
-#### Python 依赖
+## 2. 环境准备
+
 ```bash
 pip install -r requirements.txt
-```
 
-#### vLLM
-根据硬件平台选择：
-```bash
-# 默认使用vllm-ascend镜像
-pip install vllm
-pip install vllm-ascend
-```
+# vLLM (Ascend)
+pip install vllm vllm-ascend
 
-#### AISBench
-```bash
+# AISBench
 git clone -b quant_eval https://github.com/PingqiLi/ais-bench.git
-cd ais-bench
-pip install -e ./ --use-pep517
+cd ais-bench && pip install -e ./ --use-pep517
 ```
 
-### 1.2 准备数据集
-
+准备数据集：
 ```bash
-# 下载数据集到 AISBench 目录
 ./prepare_datasets.sh /path/to/ais-bench
-
-# 示例
-./prepare_datasets.sh ~/ais-bench
 ```
 
-## 2. 标准评测 (`run.py`)
+## 3. 使用
 
-适用于 BF16/W8A8/W4A4 等标准精度评测，以及性能测试。
-
-### 快速开始
+### 3.1 精度/性能评测（`run.py`）
 
 ```bash
-# 精度评测 (BF16)
+# 精度评测
 python run.py --config-file configs/suites/qwen3-30b-bf16-acc.yaml
 
-# 精度评测 (W4A4 量化)
-python run.py --config-file configs/suites/qwen3-30b-w4a4-acc.yaml
-
-# 性能测试 (BF16)
+# 性能评测
 python run.py --config-file configs/suites/qwen3-30b-bf16-perf.yaml
 
+# 自定义模型路径
+python run.py --config-file configs/suites/qwen3-30b-w4a4-acc.yaml --model-path /path/to/model
+
+# 调试（限制数据量）
+python run.py --config-file configs/suites/qwen3-30b-bf16-acc.yaml --num-prompts 10 --debug
 ```
 
-### 常用命令
-
-#### 自定义模型路径
+也可以直接运行单个 task 配置：
 ```bash
-python run.py \
-    --config-file configs/suites/qwen3-30b-bf16-acc.yaml \
-    --model-path /path/to/custom/model
+python run.py --config-file configs/tasks/qwen3-30b-bf16/ceval.yaml
 ```
 
-#### 自定义 vLLM 参数
+### 3.2 PPL 评测（`tools/eval_ppl.py`）
+
 ```bash
-python run.py \
-    --config-file configs/suites/qwen3-30b-bf16-acc.yaml \
-    --tensor-parallel-size 4 \
-    --port 8080
+# 单模型 PPL
+python tools/eval_ppl.py --model-path /path/to/model
+
+# 量化模型 + BF16 基线对比
+python tools/eval_ppl.py \
+    --model-path /path/to/quantized_model \
+    --quantization ascend --enforce-eager \
+    --baseline-model-path /path/to/bf16_model
+
+# 使用缓存的基线 PPL（跳过 BF16 重新评测）
+python tools/eval_ppl.py \
+    --model-path /path/to/quantized_model \
+    --quantization ascend --enforce-eager \
+    --baseline-ppl 7.52
 ```
 
-#### 调试模式（限制数据量）
-```bash
-python run.py \
-    --config-file configs/suites/qwen3-30b-bf16-acc.yaml \
-    --num-prompts 10 \
-    --debug
-```
+### 3.3 常用 CLI 参数
 
-### 配置文件结构
+| 参数 | 说明 |
+|------|------|
+| `--config-file` | suite 或 task 配置文件路径 |
+| `--model-path` | 覆盖配置中的模型路径 |
+| `--tensor-parallel-size` | 覆盖 TP 数 |
+| `--port` | vLLM 服务端口 |
+| `--num-prompts` | 限制评测数据条数 |
+| `--debug` | 调试模式 |
+| `--vllm-timeout` | vLLM 启动超时（秒） |
+
+## 4. 配置体系
+
+### 4.1 目录结构
 
 ```
 configs/
-├── suites/              # 评测套件 (入口配置)
+├── suites/              # 评测套件（入口配置）
 │   ├── qwen3-30b-bf16-acc.yaml
+│   ├── qwen3-30b-w4a4-perf.yaml
 │   └── ...
-├── tasks/               # 任务配置 (模型+数据集组合)
+├── tasks/               # 任务配置（模型 + 数据集 + 参数）
 │   ├── qwen3-30b-bf16/
 │   │   ├── ceval.yaml
+│   │   ├── mmlu.yaml
 │   │   └── ...
-└── ais_bench_patches/   # AISBench 自定义配置补丁
+│   └── qwen3-30b-w4a4/
+│       └── ...
+└── ais_bench_patches/   # AISBench 数据集配置补丁
+    ├── longbenchv2/
+    └── livecodebench/
 ```
 
-### 输出目录结构
+### 4.2 Suite 配置
+
+Suite 是评测入口，定义一组要运行的 task：
+
+```yaml
+suite:
+  name: "qwen3-30b-bf16-acc"
+  description: "Full accuracy evaluation for Qwen3-30B-A3B (BF16)"
+  type: "accuracy"      # accuracy | performance | probe
+
+tasks:
+  - "configs/tasks/qwen3-30b-bf16/ceval.yaml"
+  - "configs/tasks/qwen3-30b-bf16/mmlu.yaml"
+  # ...
+
+output:
+  work_dir: "outputs/qwen3_30b_bf16_acc"
+
+# 可选：重复运行（可靠性测试）
+# suite:
+#   repeat: 5
+```
+
+### 4.3 Task 配置
+
+每个 task 是一个完整的、自包含的评测单元：
+
+```yaml
+task:
+  name: qwen3-30b-bf16-ceval
+  model: Qwen3-30B-A3B
+  precision: bf16
+  dataset: ceval
+
+vllm:
+  model_path: Qwen/Qwen3-30B-A3B
+  host: localhost
+  port: 8000
+  tensor_parallel_size: 2
+  max_model_len: 32768
+  timeout: 600
+  # 量化模型额外参数:
+  # quantization: ascend
+  # enforce_eager: true
+
+aisbench:
+  dataset: ceval_gen_0_shot_cot_chat_prompt
+  model: vllm_api_general_chat
+  mode: all              # all (精度) | perf (性能)
+  batch_size: 64
+  max_out_len: 32000
+  max_num_workers: 16
+  merge_ds: true
+  dump_eval_details: true
+
+sampling_params:
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  min_p: 0
+  seed: 42
+  repetition_penalty: 1.0
+```
+
+## 5. 定义新的评测 Suite
+
+### 5.1 添加新数据集到已有模型
+
+1. 在对应模型目录下创建 task 配置：
+
+```bash
+# 以 humaneval 为例
+vim configs/tasks/qwen3-30b-bf16/humaneval.yaml
+```
+
+```yaml
+task:
+  name: qwen3-30b-bf16-humaneval
+  model: Qwen3-30B-A3B
+  precision: bf16
+  dataset: humaneval
+
+vllm:
+  model_path: Qwen/Qwen3-30B-A3B
+  host: localhost
+  port: 8000
+  tensor_parallel_size: 2
+  max_model_len: 32768
+  timeout: 600
+
+aisbench:
+  dataset: humaneval_gen         # AISBench 中注册的数据集名
+  model: vllm_api_general_chat
+  mode: all
+  batch_size: 64
+  max_out_len: 32000
+  max_num_workers: 16
+  merge_ds: true
+  dump_eval_details: true
+
+sampling_params:
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  seed: 42
+```
+
+2. 将 task 添加到 suite：
+
+```yaml
+# configs/suites/qwen3-30b-bf16-acc.yaml
+tasks:
+  - "configs/tasks/qwen3-30b-bf16/ceval.yaml"
+  - "configs/tasks/qwen3-30b-bf16/humaneval.yaml"  # 新增
+```
+
+### 5.2 添加新模型的评测 Suite
+
+1. 创建 task 目录和各数据集配置：
+
+```bash
+mkdir configs/tasks/qwen3-32b-resq/
+# 复制已有配置作为模板，修改 model_path、precision、quantization 等
+cp configs/tasks/qwen3-30b-w4a4/ceval.yaml configs/tasks/qwen3-32b-resq/ceval.yaml
+```
+
+修改关键字段：
+```yaml
+task:
+  name: qwen3-32b-resq-ceval
+  model: Qwen3-32B
+  precision: resq
+
+vllm:
+  model_path: /path/to/resq-quantized-model
+  tensor_parallel_size: 2
+  quantization: ascend
+  enforce_eager: true
+```
+
+2. 创建 suite 配置：
+
+```yaml
+# configs/suites/qwen3-32b-resq-acc.yaml
+suite:
+  name: "qwen3-32b-resq-acc"
+  description: "Accuracy evaluation for Qwen3-32B (ResQ W4A8)"
+  type: "accuracy"
+
+tasks:
+  - "configs/tasks/qwen3-32b-resq/ceval.yaml"
+  - "configs/tasks/qwen3-32b-resq/mmlu.yaml"
+
+output:
+  work_dir: "outputs/qwen3_32b_resq_acc"
+```
+
+3. 运行：
+
+```bash
+python run.py --config-file configs/suites/qwen3-32b-resq-acc.yaml
+```
+
+### 5.3 AISBench 补丁
+
+部分数据集需要自定义 AISBench 配置（如修改 prompt 模板、version_tag 等）。补丁文件放在 `configs/ais_bench_patches/` 下，手动复制到 AISBench 安装目录：
+
+```bash
+cp configs/ais_bench_patches/longbenchv2/*.py /path/to/ais_bench/benchmark/configs/datasets/longbenchv2/
+```
+
+## 6. 输出结构
 
 ```
 outputs/qwen3_30b_bf16_acc/
 └── 2025-01-15_14-30-45/          # 实验时间戳
-    ├── configs/                   # 配置快照 (可复现)
+    ├── configs/                   # 配置快照（可复现）
     ├── vllm_logs/                 # vLLM 服务日志
-    ├── ceval/                     # 评测结果
+    ├── ceval/                     # 各数据集评测结果
+    ├── mmlu/
     └── ...
 ```
 
-## 3. 并行评测 (`parallel_eval.py`)
-
-`parallel_eval.py` 是一个独立的评测脚本，专门用于在多卡环境下并行运行多个 TP=1 的 vLLM 实例，从而显著加速 W4A4 量化模型的评测过程。
-
-### 核心特性
-
-- **自动资源分配**: 自动分配 NPU (ASCEND_RT_VISIBLE_DEVICES) 和端口。
-- **数据自动切分**: 支持 CEval (CSV) 和自定义数据集 (JSONL) 的 Stride 切分。
-- **配置自动注入**: 自动生成专属配置文件。
-- **结果聚合**: 自动收集所有实例结果。
-
-### 使用方法
-
-#### 3.1 使用标准数据集 (如 CEval)
-
+配置快照（`configs/config_snapshot.yaml`）包含完整的 suite + 所有 task 内联配置，可直接用于复现：
 ```bash
-python parallel_eval.py \
-  --rank 0,1,2,3 \
-  --model-path /path/to/Qwen3-30B-A3B-Instruct \
-  --dataset ceval \
-  --quantization ascend  # 如果是W4A4权重
+python run.py --config-file outputs/.../configs/config_snapshot.yaml
 ```
 
-#### 3.2 使用自定义采样数据集
+## 7. 常见问题
 
-结合 `tools/create_sampled_dataset.py` 生成的数据集使用：
-
-```bash
-# 1. 生成采样数据集 (生成 datasets/custom_eval 目录)
-python tools/create_sampled_dataset.py --output datasets/custom_eval ...
-
-# 2. 并行评测 (直接指定数据集目录)
-python parallel_eval.py \
-  --rank 0,1,2,3 \
-  --model-path /path/to/Qwen3-30B-A3B-Instruct \
-  --custom-dataset-path datasets/custom_eval \
-  --batch-size 16 \
-  --quantization ascend
-```
-
-**参数说明**:
-- `--rank`: 使用的NPU卡号列表 (如 `0,1,2,3`)
-- `--model-path`: 模型路径
-- `--custom-dataset-path`: 自定义数据集路径 (支持 JSONL)
-- `--batch-size`: 指定 ais_bench 的 batch size
-- `--quantization`: 量化方式 (如 `ascend` 用于 W4A4)
-- `--enforce-eager`: 脚本默认开启，强制使用 eager 模式以保证精度
-
-### 输出目录结构
-
-```
-outputs/parallel_ceval_<timestamp>/
-├── ceval_split_0/          # 切分数据集
-├── instance_0/             # AISBench 评测结果
-├── vllm_rank0_port8000.log # vLLM 日志
-└── ais_bench_instance0.log # AISBench 日志
-```
-
-### 注意事项
-
-- **仅限 W4A4/TP=1**: 如果模型支持 TP>1 (如 BF16 TP=8)，请直接使用 `run.py`。
-- **结果聚合**: 脚本会收集所有实例的 Partial Result，但不会自动重新计算整体准确率。
-
-## 4. 常见问题
-
-### 1. MATH500 评测报错：ModuleNotFoundError
-
-```bash
-pip install latex2sympy2_extended math_verify
-```
-
-### 2. 显存不足 (OOM)
-
-降低配置（修改 task 配置文件中的 vllm 参数）：
-```yaml
-vllm:
-  gpu_memory_utilization: 0.85
-  max_num_seqs: 128
-  max_model_len: 16384
-
-aisbench:
-  max_num_workers: 8
-```
-
-### 3. 端口占用
-
-```bash
-# 使用不同端口
-python run.py --config-file config.yaml --port 8080
-```
-
-### 4. vLLM 启动超时
-
-```bash
-python run.py --config-file config.yaml --vllm-timeout 900
-```
+| 问题 | 解决 |
+|------|------|
+| MATH500 报 `ModuleNotFoundError` | `pip install latex2sympy2_extended math_verify` |
+| OOM | 降低 task 配置中 `gpu_memory_utilization`、`max_num_seqs`、`max_model_len` |
+| 端口占用 | `--port 8080` |
+| vLLM 启动超时 | `--vllm-timeout 900` |
